@@ -166,11 +166,25 @@ local function is_interval_endpoint(text)
   if text == "" or #text > 28 then
     return false
   end
-  if text:find("[,;=]") then
+  if text:find("[,;=_]") then
     return false
   end
 
-  return text:match("^[%w%s_%.%+%-%*/%^{}\\]+$") ~= nil
+  local compact = text:gsub("%s+", "")
+  if compact:match("^%-?\\infty$") or compact:match("^%+?\\infty$") then
+    return true
+  end
+  if compact:match("^%-?%d+%.?%d*$") then
+    return true
+  end
+  if compact:match("^%-?\\frac{%d+}{%d+}$") then
+    return true
+  end
+  if compact:match("^%-?%a$") then
+    return true
+  end
+
+  return false
 end
 
 local function has_one_top_level_comma(text)

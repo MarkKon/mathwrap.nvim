@@ -393,6 +393,27 @@ tests["keep interval atoms compact inside expandable groups"] = function()
   })
 end
 
+tests["do not force uncertain mixed comma groups into interval atoms"] = function()
+  reset_mathwrap()
+  require("mathwrap").setup({})
+
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, {
+    "$$",
+    "  uncertain = outer((alpha_one,beta_two] + gamma_three + delta_four + epsilon_five + zeta_six)  ",
+    "$$",
+  })
+  vim.api.nvim_win_set_cursor(0, { 2, 0 })
+
+  vim.cmd("LatexMathFormat")
+
+  assert_lines({
+    "$$",
+    "uncertain",
+    "= outer((alpha_one,beta_two] + gamma_three + delta_four + epsilon_five + zeta_six)",
+    "$$",
+  })
+end
+
 tests["expand nested raw bracketed groups recursively while preserving delimiter spelling"] = function()
   reset_mathwrap()
   require("mathwrap").setup({})
