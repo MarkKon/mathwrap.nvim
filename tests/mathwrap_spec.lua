@@ -707,6 +707,44 @@ tests["do not treat arrow commands as scalable delimiter commands"] = function()
   })
 end
 
+tests["do not split unary signs after relations or operators inside expanded brackets"] = function()
+  reset_mathwrap()
+  require("mathwrap").setup({})
+
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, {
+    "$$",
+    "  relation = outer(alpha = -beta + gamma + delta + epsilon + zeta)  ",
+    "  operator = outer(alpha \\cdot -beta + gamma + delta + epsilon + zeta + eta + theta)  ",
+    "$$",
+  })
+  vim.api.nvim_win_set_cursor(0, { 2, 0 })
+
+  vim.cmd("LatexMathFormat")
+
+  assert_lines({
+    "$$",
+    "relation",
+    "= outer(",
+    "  alpha = -beta",
+    "  + gamma",
+    "  + delta",
+    "  + epsilon",
+    "  + zeta",
+    ")",
+    "operator",
+    "= outer(",
+    "  alpha \\cdot -beta",
+    "  + gamma",
+    "  + delta",
+    "  + epsilon",
+    "  + zeta",
+    "  + eta",
+    "  + theta",
+    ")",
+    "$$",
+  })
+end
+
 local failures = {}
 for name, test in pairs(tests) do
   vim.cmd("enew!")

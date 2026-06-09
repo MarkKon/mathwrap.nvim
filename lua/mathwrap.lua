@@ -187,7 +187,24 @@ local function has_operand_before(text, operator_index, segment_start)
   end
 
   local last = left:sub(#left, #left)
-  return last ~= "+" and last ~= "-"
+  if last:match("[%+%-%*/=<>:]") then
+    return false
+  end
+
+  local command = left:match("(\\%a+)%s*$")
+  if command then
+    return not ({
+      ["\\cdot"] = true,
+      ["\\times"] = true,
+      ["\\leq"] = true,
+      ["\\geq"] = true,
+      ["\\in"] = true,
+      ["\\sim"] = true,
+      ["\\to"] = true,
+    })[command]
+  end
+
+  return true
 end
 
 local function has_operand_after(text, operator_index)
