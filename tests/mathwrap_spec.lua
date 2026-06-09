@@ -647,6 +647,42 @@ tests["expand vertical delimiter pairs without treating bars as clause separator
   })
 end
 
+tests["preserve unpaired vertical bars inside enclosing groups"] = function()
+  reset_mathwrap()
+  require("mathwrap").setup({})
+
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, {
+    "$$",
+    "  builder = \\{x\\in A | predicate_one + predicate_two + predicate_three + predicate_four + predicate_five\\}  ",
+    "  escaped_builder = \\{x\\in A \\| predicate_one + predicate_two + predicate_three + predicate_four + predicate_five\\}  ",
+    "$$",
+  })
+  vim.api.nvim_win_set_cursor(0, { 2, 0 })
+
+  vim.cmd("LatexMathFormat")
+
+  assert_lines({
+    "$$",
+    "builder",
+    "= \\{",
+    "  x\\in A | predicate_one",
+    "  + predicate_two",
+    "  + predicate_three",
+    "  + predicate_four",
+    "  + predicate_five",
+    "\\}",
+    "escaped_builder",
+    "= \\{",
+    "  x\\in A \\| predicate_one",
+    "  + predicate_two",
+    "  + predicate_three",
+    "  + predicate_four",
+    "  + predicate_five",
+    "\\}",
+    "$$",
+  })
+end
+
 tests["expand scalable delimiter pairs while preserving attached delimiters"] = function()
   reset_mathwrap()
   require("mathwrap").setup({})

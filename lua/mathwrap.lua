@@ -475,6 +475,48 @@ local function vertical_delimiter_at(text, index)
   return nil
 end
 
+local function has_matching_vertical_delimiter(text, opener_token)
+  local stack = {}
+  local index = opener_token.finish + 1
+
+  while index <= #text do
+    local interval_atom = interval_atom_at(text, index)
+    local scalable_opener = left_delimiter_at(text, index)
+    local scalable_closer = right_delimiter_at(text, index)
+    local opener = raw_opener_at(text, index) or escaped_opener_at(text, index)
+    local closer = raw_closer_at(text, index) or escaped_closer_at(text, index)
+    local vertical = vertical_delimiter_at(text, index)
+
+    if interval_atom then
+      index = interval_atom.finish + 1
+    elseif #stack == 0 and vertical and vertical.token == opener_token.token then
+      return true
+    elseif #stack == 0 and (scalable_closer or closer) then
+      return false
+    elseif scalable_opener then
+      table.insert(stack, { kind = "scalable" })
+      index = scalable_opener.finish + 1
+    elseif scalable_closer then
+      if #stack > 0 and stack[#stack].kind == "scalable" then
+        table.remove(stack)
+      end
+      index = scalable_closer.finish + 1
+    elseif opener then
+      table.insert(stack, { closer = opener.expected_closer, kind = opener.kind })
+      index = opener.finish + 1
+    elseif closer then
+      if #stack > 0 and stack[#stack].kind == closer.kind and stack[#stack].closer == closer.closer then
+        table.remove(stack)
+      end
+      index = closer.finish + 1
+    else
+      index = index + 1
+    end
+  end
+
+  return false
+end
+
 any_depth_opener_at = function(text, index)
   return raw_opener_at(text, index) or escaped_opener_at(text, index) or left_delimiter_at(text, index) or vertical_delimiter_at(text, index)
 end
@@ -522,8 +564,10 @@ advance_delimiter_depth = function(text, index, stack)
   if vertical then
     if #stack > 0 and stack[#stack].kind == "vertical" and stack[#stack].token == vertical.token then
       table.remove(stack)
-    else
+    elseif has_matching_vertical_delimiter(text, vertical) then
       table.insert(stack, { kind = "vertical", token = vertical.token, unsupported = false })
+    else
+      return false, index
     end
     return true, vertical.finish + 1
   end
@@ -629,7 +673,7 @@ local function find_matching_closer(text, opener_token)
         if #stack == 0 then
           return vertical
         end
-      else
+      elseif has_matching_vertical_delimiter(text, vertical) then
         table.insert(stack, { kind = "vertical", token = vertical.token, unsupported = false })
       end
       index = vertical.finish + 1
