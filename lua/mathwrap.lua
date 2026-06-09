@@ -8,30 +8,20 @@ local function find_enclosing_display_math_block(bufnr, cursor_line)
   local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
   local opener
 
-  for line_number = cursor_line, 1, -1 do
+  for line_number = 1, #lines do
     if is_display_math_delimiter(lines[line_number] or "") then
-      opener = line_number
-      break
+      if opener then
+        if opener <= cursor_line and cursor_line <= line_number then
+          return opener, line_number
+        end
+        opener = nil
+      else
+        opener = line_number
+      end
     end
   end
 
-  if not opener then
-    return nil
-  end
-
-  local closer
-  for line_number = opener + 1, #lines do
-    if is_display_math_delimiter(lines[line_number] or "") then
-      closer = line_number
-      break
-    end
-  end
-
-  if not closer or cursor_line > closer then
-    return nil
-  end
-
-  return opener, closer
+  return nil
 end
 
 local function format_math_body(lines)
