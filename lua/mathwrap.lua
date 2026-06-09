@@ -25,10 +25,54 @@ local function find_enclosing_display_math_block(bufnr, cursor_line)
 end
 
 local function format_math_body(lines)
-  local formatted = {}
-  for _, line in ipairs(lines) do
-    table.insert(formatted, vim.trim(line))
+  local body = vim.trim(table.concat(lines, " "):gsub("%s+", " "))
+  if body == "" then
+    return { "" }
   end
+
+  local formatted = {}
+  local position = 1
+  while position <= #body do
+    local leq_start, leq_end = body:find("(\\leq)", position)
+    local geq_start, geq_end = body:find("(\\geq)", position)
+    local eq_start, eq_end = body:find("(=)", position)
+
+    local relation_start, relation_end, relation
+    for _, candidate in ipairs({
+      { start = body:find(":=", position, true), token = ":=" },
+      { start = leq_start, finish = leq_end, token = "\\leq" },
+      { start = geq_start, finish = geq_end, token = "\\geq" },
+      { start = eq_start, finish = eq_end, token = "=" },
+    }) do
+      if candidate.start and (not relation_start or candidate.start < relation_start) then
+        relation_start = candidate.start
+        relation = candidate.token
+        relation_end = candidate.finish or (candidate.start + #candidate.token - 1)
+      end
+    end
+
+    if not relation_start then
+      local segment = vim.trim(body:sub(position))
+      if segment ~= "" then
+        if #formatted == 0 then
+          table.insert(formatted, segment)
+        else
+          formatted[#formatted] = formatted[#formatted] .. " " .. segment
+        end
+      end
+      break
+    end
+
+    local segment = vim.trim(body:sub(position, relation_start - 1))
+    if #formatted == 0 then
+      table.insert(formatted, segment)
+    elseif segment ~= "" then
+      formatted[#formatted] = formatted[#formatted] .. " " .. segment
+    end
+    table.insert(formatted, relation)
+    position = relation_end + 1
+  end
+
   return formatted
 end
 
