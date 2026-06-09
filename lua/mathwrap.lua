@@ -24,8 +24,88 @@ local function find_enclosing_display_math_block(bufnr, cursor_line)
   return nil
 end
 
+local is_escaped_at
+
+local protected_text_commands = {
+  ["\\text"] = true,
+  ["\\textrm"] = true,
+  ["\\textit"] = true,
+  ["\\textbf"] = true,
+  ["\\mathrm"] = true,
+  ["\\operatorname"] = true,
+}
+
+local function find_matching_brace(text, opener_index)
+  local depth = 1
+  local index = opener_index + 1
+
+  while index <= #text do
+    local char = text:sub(index, index)
+    if char == "{" and not is_escaped_at(text, index) then
+      depth = depth + 1
+    elseif char == "}" and not is_escaped_at(text, index) then
+      depth = depth - 1
+      if depth == 0 then
+        return index
+      end
+    end
+    index = index + 1
+  end
+
+  return nil
+end
+
+local function protect_text_command_arguments(text)
+  local protected = {}
+  local output = {}
+  local index = 1
+  local protected_count = 0
+
+  while index <= #text do
+    local matched_command
+    for command in pairs(protected_text_commands) do
+      if text:sub(index, index + #command - 1) == command then
+        local after = index + #command
+        local next_char = text:sub(after, after)
+        if next_char == "{" then
+          matched_command = command
+          break
+        end
+      end
+    end
+
+    if matched_command then
+      local opener = index + #matched_command
+      local closer = find_matching_brace(text, opener)
+      if closer then
+        protected_count = protected_count + 1
+        local placeholder = ("MWTEXTARG%d"):format(protected_count)
+        protected[placeholder] = text:sub(index, closer)
+        table.insert(output, placeholder)
+        index = closer + 1
+      else
+        table.insert(output, text:sub(index, index))
+        index = index + 1
+      end
+    else
+      table.insert(output, text:sub(index, index))
+      index = index + 1
+    end
+  end
+
+  return table.concat(output), protected
+end
+
+local function restore_protected_text(line, protected)
+  for placeholder, original in pairs(protected) do
+    line = line:gsub(placeholder, original)
+  end
+  return line
+end
+
 local function normalize_math_body(lines)
-  return vim.trim(table.concat(lines, " "):gsub("%s+", " "))
+  local protected_body, protected = protect_text_command_arguments(table.concat(lines, " "))
+  return vim.trim(protected_body:gsub("%s+", " ")), protected
 end
 
 local raw_closers = {
@@ -46,7 +126,7 @@ local raw_closer_set = {
   ["}"] = true,
 }
 
-local function is_escaped_at(text, index)
+is_escaped_at = function(text, index)
   local backslashes = 0
   local cursor = index - 1
   while cursor >= 1 and text:sub(cursor, cursor) == "\\" do
@@ -747,7 +827,7 @@ local function append_clause(formatted, clause)
 end
 
 local function format_math_body(lines)
-  local body = normalize_math_body(lines)
+  local body, protected = normalize_math_body(lines)
   if body == "" then
     return #lines == 0 and {} or { "" }
   end
@@ -764,6 +844,10 @@ local function format_math_body(lines)
     append_clause(formatted, body:sub(position, separator_start - 1))
     table.insert(formatted, separator)
     position = separator_end + 1
+  end
+
+  for index, line in ipairs(formatted) do
+    formatted[index] = restore_protected_text(line, protected)
   end
 
   return formatted

@@ -414,6 +414,30 @@ tests["do not force uncertain mixed comma groups into interval atoms"] = functio
   })
 end
 
+tests["preserve protected text command arguments without normalization or expansion"] = function()
+  reset_mathwrap()
+  require("mathwrap").setup({})
+
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, {
+    "$$",
+    "  label = \\text{two   spaces = stay + inline} \\quad name = \\operatorname{very   long + operator + name + stays + inline}  ",
+    "$$",
+  })
+  vim.api.nvim_win_set_cursor(0, { 2, 0 })
+
+  vim.cmd("LatexMathFormat")
+
+  assert_lines({
+    "$$",
+    "label",
+    "= \\text{two   spaces = stay + inline}",
+    "\\quad",
+    "name",
+    "= \\operatorname{very   long + operator + name + stays + inline}",
+    "$$",
+  })
+end
+
 tests["expand nested raw bracketed groups recursively while preserving delimiter spelling"] = function()
   reset_mathwrap()
   require("mathwrap").setup({})
