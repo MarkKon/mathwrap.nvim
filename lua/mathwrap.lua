@@ -254,7 +254,10 @@ local function append_expanded_bracketed_line(output, line, indent)
   for _, segment in ipairs(segments) do
     expand_bracketed_segment(output, segment, indent .. "  ")
   end
-  table.insert(output, indent .. vim.trim(closer_token.token .. (suffix ~= "" and (" " .. suffix) or "")))
+  table.insert(output, indent .. closer_token.token)
+  if suffix ~= "" then
+    expand_bracketed_segment(output, suffix, indent)
+  end
 end
 
 expand_bracketed_segment = function(output, segment, indent)

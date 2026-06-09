@@ -479,20 +479,66 @@ tests["expand bracketed additive chains without splitting unary signs"] = functi
     "  + gamma_three",
     "  + delta_four",
     "  + epsilon_five",
-    ") second",
+    ")",
+    "second",
     "= (",
     "  alpha_one",
     "  - -beta_two",
     "  + gamma_three",
     "  + delta_four",
     "  + epsilon_five",
-    ") third",
+    ")",
+    "third",
     "= (",
     "  -alpha_one",
     "  + beta_two",
     "  + gamma_three",
     "  + delta_four",
     "  + epsilon_five",
+    ")",
+    "$$",
+  })
+end
+
+tests["keep expanded closers alone before suffixes and later groups"] = function()
+  reset_mathwrap()
+  require("mathwrap").setup({})
+
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, {
+    "$$",
+    "  F = alpha(beta_one + beta_two + beta_three + beta_four + beta_five + beta_six) + tail  ",
+    "  G = first(left_one + left_two + left_three + left_four + left_five) + second(right_one + right_two + right_three + right_four + right_five)  ",
+    "$$",
+  })
+  vim.api.nvim_win_set_cursor(0, { 2, 0 })
+
+  vim.cmd("LatexMathFormat")
+
+  assert_lines({
+    "$$",
+    "F",
+    "= alpha(",
+    "  beta_one",
+    "  + beta_two",
+    "  + beta_three",
+    "  + beta_four",
+    "  + beta_five",
+    "  + beta_six",
+    ")",
+    "+ tail G",
+    "= first(",
+    "  left_one",
+    "  + left_two",
+    "  + left_three",
+    "  + left_four",
+    "  + left_five",
+    ")",
+    "+ second(",
+    "  right_one",
+    "  + right_two",
+    "  + right_three",
+    "  + right_four",
+    "  + right_five",
     ")",
     "$$",
   })
