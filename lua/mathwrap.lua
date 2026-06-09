@@ -60,6 +60,7 @@ local function protect_text_command_arguments(text)
   local output = {}
   local index = 1
   local protected_count = 0
+  local placeholder_prefix = "\31MATHWRAP_TEXT_ARG_"
 
   while index <= #text do
     local matched_command
@@ -79,8 +80,12 @@ local function protect_text_command_arguments(text)
       local closer = find_matching_brace(text, opener)
       if closer then
         protected_count = protected_count + 1
-        local placeholder = ("MWTEXTARG%d"):format(protected_count)
-        protected[placeholder] = text:sub(index, closer)
+        local placeholder = ("%s%d\31"):format(placeholder_prefix, protected_count)
+        while text:find(placeholder, 1, true) do
+          protected_count = protected_count + 1
+          placeholder = ("%s%d\31"):format(placeholder_prefix, protected_count)
+        end
+        table.insert(protected, { placeholder = placeholder, original = text:sub(index, closer) })
         table.insert(output, placeholder)
         index = closer + 1
       else
@@ -96,9 +101,28 @@ local function protect_text_command_arguments(text)
   return table.concat(output), protected
 end
 
+local function replace_literal(text, needle, replacement)
+  local output = {}
+  local position = 1
+
+  while position <= #text do
+    local start_index, end_index = text:find(needle, position, true)
+    if not start_index then
+      table.insert(output, text:sub(position))
+      break
+    end
+
+    table.insert(output, text:sub(position, start_index - 1))
+    table.insert(output, replacement)
+    position = end_index + 1
+  end
+
+  return table.concat(output)
+end
+
 local function restore_protected_text(line, protected)
-  for placeholder, original in pairs(protected) do
-    line = line:gsub(placeholder, original)
+  for _, entry in ipairs(protected) do
+    line = replace_literal(line, entry.placeholder, entry.original)
   end
   return line
 end

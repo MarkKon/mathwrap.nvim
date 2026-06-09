@@ -442,6 +442,53 @@ tests["preserve protected text command arguments without normalization or expans
   })
 end
 
+tests["preserve literal text that looks like a protected text placeholder"] = function()
+  reset_mathwrap()
+  require("mathwrap").setup({})
+
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, {
+    "$$",
+    "  token = MWTEXTARG1 + \\text{real   protected text}  ",
+    "$$",
+  })
+  vim.api.nvim_win_set_cursor(0, { 2, 0 })
+
+  vim.cmd("LatexMathFormat")
+
+  assert_lines({
+    "$$",
+    "token",
+    "= MWTEXTARG1 + \\text{real   protected text}",
+    "$$",
+  })
+end
+
+tests["restore many protected text command arguments idempotently"] = function()
+  reset_mathwrap()
+  require("mathwrap").setup({})
+
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, {
+    "$$",
+    "  labels = \\text{one   stays} + \\text{two   stays} + \\text{three   stays} + \\text{four   stays} + \\text{five   stays} + \\text{six   stays} + \\text{seven   stays} + \\text{eight   stays} + \\text{nine   stays} + \\text{ten   stays}  ",
+    "$$",
+  })
+  vim.api.nvim_win_set_cursor(0, { 2, 0 })
+
+  vim.cmd("LatexMathFormat")
+  local once = vim.api.nvim_buf_get_lines(0, 0, -1, false)
+
+  vim.cmd("LatexMathFormat")
+  local twice = vim.api.nvim_buf_get_lines(0, 0, -1, false)
+
+  assert(vim.deep_equal(twice, once), ("expected idempotent output, got %s then %s"):format(vim.inspect(once), vim.inspect(twice)))
+  assert_lines({
+    "$$",
+    "labels",
+    "= \\text{one   stays} + \\text{two   stays} + \\text{three   stays} + \\text{four   stays} + \\text{five   stays} + \\text{six   stays} + \\text{seven   stays} + \\text{eight   stays} + \\text{nine   stays} + \\text{ten   stays}",
+    "$$",
+  })
+end
+
 tests["expand long non-text braced command arguments"] = function()
   reset_mathwrap()
   require("mathwrap").setup({})
