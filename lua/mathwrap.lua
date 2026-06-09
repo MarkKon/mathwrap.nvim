@@ -94,43 +94,43 @@ local function escaped_closer_at(text, index)
   }
 end
 
-local function left_delimiter_at(text, index)
-  if text:sub(index, index + 4) ~= "\\left" then
+local function scalable_delimiter_at(text, index, command)
+  if text:sub(index, index + #command - 1) ~= command then
     return nil
   end
 
-  local delimiter_index = index + 5
-  local delimiter = text:sub(delimiter_index, delimiter_index)
-  if not raw_openers[delimiter] then
+  local delimiter_start = index + #command
+  local delimiter = text:sub(delimiter_start, delimiter_start)
+  if delimiter == "" then
     return nil
+  end
+
+  local finish = delimiter_start
+  if delimiter == "\\" then
+    local command_end = text:find("[^%a]", delimiter_start + 1)
+    if command_end then
+      finish = command_end - 1
+    else
+      finish = #text
+    end
+    if finish < delimiter_start + 1 then
+      finish = delimiter_start + 1
+    end
   end
 
   return {
     start = index,
-    finish = delimiter_index,
-    token = text:sub(index, delimiter_index),
-    opener = delimiter,
-    expected_closer = raw_closers[delimiter],
+    finish = finish,
+    token = text:sub(index, finish),
   }
 end
 
+local function left_delimiter_at(text, index)
+  return scalable_delimiter_at(text, index, "\\left")
+end
+
 local function right_delimiter_at(text, index)
-  if text:sub(index, index + 5) ~= "\\right" then
-    return nil
-  end
-
-  local delimiter_index = index + 6
-  local delimiter = text:sub(delimiter_index, delimiter_index)
-  if not raw_closer_set[delimiter] then
-    return nil
-  end
-
-  return {
-    start = index,
-    finish = delimiter_index,
-    token = text:sub(index, delimiter_index),
-    closer = delimiter,
-  }
+  return scalable_delimiter_at(text, index, "\\right")
 end
 
 local function raw_opener_at(text, index)

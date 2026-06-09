@@ -645,6 +645,46 @@ tests["do not split inside unsupported delimiter spans nested in expanded raw gr
   })
 end
 
+tests["do not split inside general scalable delimiter spans"] = function()
+  reset_mathwrap()
+  require("mathwrap").setup({})
+
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, {
+    "$$",
+    "  dotted = \\left.alpha = beta \\quad gamma = delta\\right.  ",
+    "  bars = \\left|alpha = beta \\quad gamma = delta\\right|  ",
+    "  escaped = outer(\\left\\{alpha + beta, eta; theta\\right\\} + gamma + delta + epsilon + zeta)  ",
+    "  command = outer(\\left\\langle alpha + beta, eta; theta\\right\\rangle + gamma + delta + epsilon + zeta)  ",
+    "$$",
+  })
+  vim.api.nvim_win_set_cursor(0, { 2, 0 })
+
+  vim.cmd("LatexMathFormat")
+
+  assert_lines({
+    "$$",
+    "dotted",
+    "= \\left.alpha = beta \\quad gamma = delta\\right. bars",
+    "= \\left|alpha = beta \\quad gamma = delta\\right| escaped",
+    "= outer(",
+    "  \\left\\{alpha + beta, eta; theta\\right\\}",
+    "  + gamma",
+    "  + delta",
+    "  + epsilon",
+    "  + zeta",
+    ")",
+    "command",
+    "= outer(",
+    "  \\left\\langle alpha + beta, eta; theta\\right\\rangle",
+    "  + gamma",
+    "  + delta",
+    "  + epsilon",
+    "  + zeta",
+    ")",
+    "$$",
+  })
+end
+
 local failures = {}
 for name, test in pairs(tests) do
   vim.cmd("enew!")
