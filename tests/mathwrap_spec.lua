@@ -397,6 +397,39 @@ tests["expand nested raw bracketed groups recursively while preserving delimiter
   })
 end
 
+tests["expand raw bracketed expressions idempotently"] = function()
+  reset_mathwrap()
+  require("mathwrap").setup({})
+
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, {
+    "$$",
+    "  output = {left_one + left_two; right_one + right_two; final_one + final_two}  ",
+    "$$",
+  })
+  vim.api.nvim_win_set_cursor(0, { 2, 0 })
+
+  vim.cmd("LatexMathFormat")
+  local once = vim.api.nvim_buf_get_lines(0, 0, -1, false)
+
+  vim.cmd("LatexMathFormat")
+  local twice = vim.api.nvim_buf_get_lines(0, 0, -1, false)
+
+  assert(vim.deep_equal(twice, once), ("expected idempotent output, got %s then %s"):format(vim.inspect(once), vim.inspect(twice)))
+  assert_lines({
+    "$$",
+    "output",
+    "= {",
+    "  left_one",
+    "  + left_two;",
+    "  right_one",
+    "  + right_two;",
+    "  final_one",
+    "  + final_two",
+    "}",
+    "$$",
+  })
+end
+
 local failures = {}
 for name, test in pairs(tests) do
   vim.cmd("enew!")
