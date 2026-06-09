@@ -243,6 +243,30 @@ tests["format logical connectors as standalone clause-level lines"] = function()
   })
 end
 
+tests["format spacing clause separators as standalone lines"] = function()
+  reset_mathwrap()
+  require("mathwrap").setup({})
+
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, {
+    "$$",
+    "  a=b \\quad c=d  ",
+    "$$",
+  })
+  vim.api.nvim_win_set_cursor(0, { 2, 0 })
+
+  vim.cmd("LatexMathFormat")
+
+  assert_lines({
+    "$$",
+    "a",
+    "= b",
+    "\\quad",
+    "c",
+    "= d",
+    "$$",
+  })
+end
+
 local failures = {}
 for name, test in pairs(tests) do
   vim.cmd("enew!")
