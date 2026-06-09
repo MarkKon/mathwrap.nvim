@@ -9,6 +9,40 @@ end
 
 local tests = {}
 
+tests["format outside enclosing display math block leaves buffer unchanged and reports error"] = function()
+  reset_mathwrap()
+  require("mathwrap").setup({})
+
+  local notifications = {}
+  local original_notify = vim.notify
+  vim.notify = function(message, level)
+    table.insert(notifications, { message = message, level = level })
+  end
+
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, {
+    "before",
+    "$$",
+    "  a + b  ",
+    "$$",
+    "after",
+  })
+  vim.api.nvim_win_set_cursor(0, { 5, 0 })
+
+  vim.cmd("LatexMathFormat")
+
+  vim.notify = original_notify
+  assert_lines({
+    "before",
+    "$$",
+    "  a + b  ",
+    "$$",
+    "after",
+  })
+  assert(#notifications == 1, "expected one error notification")
+  assert(notifications[1].level == vim.log.levels.ERROR, "expected error notification level")
+  assert(notifications[1].message:match("no enclosing display math block"), "expected clear missing target error")
+end
+
 tests["setup registers LatexMathFormat and formats enclosing display math block"] = function()
   reset_mathwrap()
   require("mathwrap").setup({})
