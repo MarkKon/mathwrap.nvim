@@ -310,6 +310,34 @@ tests["preserve atomic spacing tokens inline"] = function()
   })
 end
 
+tests["expand long parenthesized sums with leading operator lines"] = function()
+  reset_mathwrap()
+  require("mathwrap").setup({})
+
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, {
+    "$$",
+    "  F = alpha(beta_one + beta_two + beta_three + beta_four + beta_five + beta_six)  ",
+    "$$",
+  })
+  vim.api.nvim_win_set_cursor(0, { 2, 0 })
+
+  vim.cmd("LatexMathFormat")
+
+  assert_lines({
+    "$$",
+    "F",
+    "= alpha(",
+    "  beta_one",
+    "  + beta_two",
+    "  + beta_three",
+    "  + beta_four",
+    "  + beta_five",
+    "  + beta_six",
+    ")",
+    "$$",
+  })
+end
+
 local failures = {}
 for name, test in pairs(tests) do
   vim.cmd("enew!")

@@ -28,6 +28,121 @@ local function normalize_math_body(lines)
   return vim.trim(table.concat(lines, " "):gsub("%s+", " "))
 end
 
+local raw_closers = {
+  ["("] = ")",
+  ["["] = "]",
+  ["{"] = "}",
+}
+
+local raw_openers = {
+  ["("] = true,
+  ["["] = true,
+  ["{"] = true,
+}
+
+local raw_closer_set = {
+  [")"] = true,
+  ["]"] = true,
+  ["}"] = true,
+}
+
+local function find_matching_raw_closer(text, opener_index)
+  local opener = text:sub(opener_index, opener_index)
+  local expected_closer = raw_closers[opener]
+  if not expected_closer then
+    return nil
+  end
+
+  local stack = { expected_closer }
+  for index = opener_index + 1, #text do
+    local char = text:sub(index, index)
+    if raw_openers[char] then
+      table.insert(stack, raw_closers[char])
+    elseif raw_closer_set[char] then
+      if char ~= stack[#stack] then
+        return nil
+      end
+      table.remove(stack)
+      if #stack == 0 then
+        return index
+      end
+    end
+  end
+
+  return nil
+end
+
+local function split_top_level_additive(text)
+  local segments = {}
+  local segment_start = 1
+  local depth = 0
+
+  for index = 1, #text do
+    local char = text:sub(index, index)
+    if raw_openers[char] then
+      depth = depth + 1
+    elseif raw_closer_set[char] then
+      depth = depth - 1
+    elseif depth == 0 and (char == "+" or char == "-") then
+      local left = vim.trim(text:sub(segment_start, index - 1))
+      local right = vim.trim(text:sub(index + 1))
+      if left ~= "" and right ~= "" then
+        table.insert(segments, left)
+        segment_start = index
+      end
+    end
+  end
+
+  if #segments == 0 then
+    return nil
+  end
+
+  table.insert(segments, vim.trim(text:sub(segment_start)))
+  return segments
+end
+
+local function find_expandable_raw_group(line)
+  if #line <= 60 then
+    return nil
+  end
+
+  for opener_index = 1, #line do
+    if raw_openers[line:sub(opener_index, opener_index)] then
+      local closer_index = find_matching_raw_closer(line, opener_index)
+      if closer_index then
+        local inner = vim.trim(line:sub(opener_index + 1, closer_index - 1))
+        local segments = split_top_level_additive(inner)
+        if segments then
+          return opener_index, closer_index, segments
+        end
+      end
+    end
+  end
+
+  return nil
+end
+
+local function expand_bracketed_expressions(lines)
+  local expanded = {}
+
+  for _, line in ipairs(lines) do
+    local opener_index, closer_index, segments = find_expandable_raw_group(line)
+    if not opener_index then
+      table.insert(expanded, line)
+    else
+      local opener_prefix = vim.trim(line:sub(1, opener_index))
+      local suffix = vim.trim(line:sub(closer_index + 1))
+      table.insert(expanded, opener_prefix)
+      for _, segment in ipairs(segments) do
+        table.insert(expanded, "  " .. segment)
+      end
+      table.insert(expanded, vim.trim(line:sub(closer_index, closer_index) .. (suffix ~= "" and (" " .. suffix) or "")))
+    end
+  end
+
+  return expanded
+end
+
 local function find_next_equation_relation(body, position)
   local leq_start, leq_end = body:find("(\\leq)", position)
   local geq_start, geq_end = body:find("(\\geq)", position)
@@ -78,7 +193,7 @@ local function format_equation_clause(body)
     position = relation_end + 1
   end
 
-  return formatted
+  return expand_bracketed_expressions(formatted)
 end
 
 local function find_next_clause_separator(body, position)
