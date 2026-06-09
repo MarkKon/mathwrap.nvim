@@ -600,6 +600,51 @@ tests["do not split relations or clause separators inside unsupported delimiter 
   })
 end
 
+tests["do not split inside unsupported delimiter spans nested in expanded raw groups"] = function()
+  reset_mathwrap()
+  require("mathwrap").setup({})
+
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, {
+    "$$",
+    "  additive = outer(\\{alpha + beta\\} + gamma + delta + epsilon + zeta)  ",
+    "  punctuation = outer(\\left(alpha, beta; eta\\right) + gamma + delta + epsilon + zeta)  ",
+    "  relation = outer(\\{alpha = beta \\quad gamma = delta\\} + gamma + delta + epsilon + zeta)  ",
+    "$$",
+  })
+  vim.api.nvim_win_set_cursor(0, { 2, 0 })
+
+  vim.cmd("LatexMathFormat")
+
+  assert_lines({
+    "$$",
+    "additive",
+    "= outer(",
+    "  \\{alpha + beta\\}",
+    "  + gamma",
+    "  + delta",
+    "  + epsilon",
+    "  + zeta",
+    ")",
+    "punctuation",
+    "= outer(",
+    "  \\left(alpha, beta; eta\\right)",
+    "  + gamma",
+    "  + delta",
+    "  + epsilon",
+    "  + zeta",
+    ")",
+    "relation",
+    "= outer(",
+    "  \\{alpha = beta \\quad gamma = delta\\}",
+    "  + gamma",
+    "  + delta",
+    "  + epsilon",
+    "  + zeta",
+    ")",
+    "$$",
+  })
+end
+
 local failures = {}
 for name, test in pairs(tests) do
   vim.cmd("enew!")

@@ -170,6 +170,14 @@ local function unsupported_closer_at(text, index)
   return escaped_closer_at(text, index) or right_delimiter_at(text, index)
 end
 
+local function any_depth_opener_at(text, index)
+  return raw_opener_at(text, index) or unsupported_opener_at(text, index)
+end
+
+local function any_depth_closer_at(text, index)
+  return raw_closer_at(text, index) or unsupported_closer_at(text, index)
+end
+
 local function has_operand_before(text, operator_index, segment_start)
   local left = vim.trim(text:sub(segment_start, operator_index - 1))
   if left == "" then
@@ -229,9 +237,9 @@ local function split_top_level_additive(text)
 
   for index = 1, #text do
     local char = text:sub(index, index)
-    if raw_opener_at(text, index) then
+    if any_depth_opener_at(text, index) then
       depth = depth + 1
-    elseif raw_closer_at(text, index) then
+    elseif any_depth_closer_at(text, index) then
       depth = depth - 1
     elseif depth == 0 and (char == "+" or char == "-") then
       if has_operand_before(text, index, segment_start) and has_operand_after(text, index) then
@@ -256,9 +264,9 @@ local function split_top_level_punctuation_items(text)
 
   for index = 1, #text do
     local char = text:sub(index, index)
-    if raw_opener_at(text, index) then
+    if any_depth_opener_at(text, index) then
       depth = depth + 1
-    elseif raw_closer_at(text, index) then
+    elseif any_depth_closer_at(text, index) then
       depth = depth - 1
     elseif depth == 0 and (char == "," or char == ";") then
       table.insert(items, { text = vim.trim(text:sub(item_start, index - 1)), separator = char })
@@ -297,22 +305,14 @@ local function find_top_level_token(text, token, position)
   local depth = 0
   local index = position
   while index <= #text do
-    local opener = raw_opener_at(text, index)
-    local closer = raw_closer_at(text, index)
-    local unsupported_opener = unsupported_opener_at(text, index)
-    local unsupported_closer = unsupported_closer_at(text, index)
+    local opener = any_depth_opener_at(text, index)
+    local closer = any_depth_closer_at(text, index)
     if opener then
       depth = depth + 1
       index = opener.finish + 1
     elseif closer then
       depth = depth - 1
       index = closer.finish + 1
-    elseif unsupported_opener then
-      depth = depth + 1
-      index = unsupported_opener.finish + 1
-    elseif unsupported_closer then
-      depth = depth - 1
-      index = unsupported_closer.finish + 1
     elseif depth == 0 and text:sub(index, index + #token - 1) == token then
       return index, index + #token - 1
     else
