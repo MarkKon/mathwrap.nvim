@@ -46,25 +46,74 @@ local raw_closer_set = {
   ["}"] = true,
 }
 
-local function find_matching_raw_closer(text, opener_index)
-  local opener = text:sub(opener_index, opener_index)
+local function is_escaped_at(text, index)
+  local backslashes = 0
+  local cursor = index - 1
+  while cursor >= 1 and text:sub(cursor, cursor) == "\\" do
+    backslashes = backslashes + 1
+    cursor = cursor - 1
+  end
+
+  return backslashes % 2 == 1
+end
+
+local function is_attached_to_left_command(text, index)
+  return text:sub(math.max(1, index - 5), index - 1) == "\\left"
+end
+
+local function is_attached_to_right_command(text, index)
+  return text:sub(math.max(1, index - 6), index - 1) == "\\right"
+end
+
+local function raw_opener_at(text, index)
+  local opener = text:sub(index, index)
+  if not raw_openers[opener] or is_escaped_at(text, index) or is_attached_to_left_command(text, index) then
+    return nil
+  end
+
+  return {
+    start = index,
+    finish = index,
+    token = opener,
+    opener = opener,
+    expected_closer = raw_closers[opener],
+  }
+end
+
+local function raw_closer_at(text, index)
+  local closer = text:sub(index, index)
+  if not raw_closer_set[closer] or is_escaped_at(text, index) or is_attached_to_right_command(text, index) then
+    return nil
+  end
+
+  return {
+    start = index,
+    finish = index,
+    token = closer,
+    closer = closer,
+  }
+end
+
+local function find_matching_raw_closer(text, opener_token)
+  local opener = opener_token.opener
   local expected_closer = raw_closers[opener]
   if not expected_closer then
     return nil
   end
 
-  local stack = { expected_closer }
-  for index = opener_index + 1, #text do
-    local char = text:sub(index, index)
-    if raw_openers[char] then
-      table.insert(stack, raw_closers[char])
-    elseif raw_closer_set[char] then
-      if char ~= stack[#stack] then
+  local stack = { { closer = expected_closer } }
+  for index = opener_token.finish + 1, #text do
+    local nested_opener = raw_opener_at(text, index)
+    local closer_token = raw_closer_at(text, index)
+    if nested_opener then
+      table.insert(stack, { closer = nested_opener.expected_closer })
+    elseif closer_token then
+      if closer_token.closer ~= stack[#stack].closer then
         return nil
       end
       table.remove(stack)
       if #stack == 0 then
-        return index
+        return closer_token
       end
     end
   end
@@ -79,9 +128,9 @@ local function split_top_level_additive(text)
 
   for index = 1, #text do
     local char = text:sub(index, index)
-    if raw_openers[char] then
+    if raw_opener_at(text, index) then
       depth = depth + 1
-    elseif raw_closer_set[char] then
+    elseif raw_closer_at(text, index) then
       depth = depth - 1
     elseif depth == 0 and (char == "+" or char == "-") then
       local left = vim.trim(text:sub(segment_start, index - 1))
@@ -108,9 +157,9 @@ local function split_top_level_punctuation_items(text)
 
   for index = 1, #text do
     local char = text:sub(index, index)
-    if raw_openers[char] then
+    if raw_opener_at(text, index) then
       depth = depth + 1
-    elseif raw_closer_set[char] then
+    elseif raw_closer_at(text, index) then
       depth = depth - 1
     elseif depth == 0 and (char == "," or char == ";") then
       table.insert(items, { text = vim.trim(text:sub(item_start, index - 1)), separator = char })
@@ -151,13 +200,14 @@ local function find_expandable_raw_group(line)
   end
 
   for opener_index = 1, #line do
-    if raw_openers[line:sub(opener_index, opener_index)] then
-      local closer_index = find_matching_raw_closer(line, opener_index)
-      if closer_index then
-        local inner = vim.trim(line:sub(opener_index + 1, closer_index - 1))
+    local opener_token = raw_opener_at(line, opener_index)
+    if opener_token then
+      local closer_token = find_matching_raw_closer(line, opener_token)
+      if closer_token then
+        local inner = vim.trim(line:sub(opener_token.finish + 1, closer_token.start - 1))
         local segments = split_bracket_inner(inner)
         if segments then
-          return opener_index, closer_index, segments
+          return opener_token, closer_token, segments
         end
       end
     end
@@ -169,19 +219,19 @@ end
 local expand_bracketed_segment
 
 local function append_expanded_bracketed_line(output, line, indent)
-  local opener_index, closer_index, segments = find_expandable_raw_group(line)
-  if not opener_index then
+  local opener_token, closer_token, segments = find_expandable_raw_group(line)
+  if not opener_token then
     table.insert(output, indent .. line)
     return
   end
 
-  local opener_prefix = vim.trim(line:sub(1, opener_index))
-  local suffix = vim.trim(line:sub(closer_index + 1))
+  local opener_prefix = vim.trim(line:sub(1, opener_token.finish))
+  local suffix = vim.trim(line:sub(closer_token.finish + 1))
   table.insert(output, indent .. opener_prefix)
   for _, segment in ipairs(segments) do
     expand_bracketed_segment(output, segment, indent .. "  ")
   end
-  table.insert(output, indent .. vim.trim(line:sub(closer_index, closer_index) .. (suffix ~= "" and (" " .. suffix) or "")))
+  table.insert(output, indent .. vim.trim(closer_token.token .. (suffix ~= "" and (" " .. suffix) or "")))
 end
 
 expand_bracketed_segment = function(output, segment, indent)

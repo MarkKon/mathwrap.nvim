@@ -430,6 +430,31 @@ tests["expand raw bracketed expressions idempotently"] = function()
   })
 end
 
+tests["do not expand visible or scalable delimiter groups in raw delimiter slice"] = function()
+  reset_mathwrap()
+  require("mathwrap").setup({})
+
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, {
+    "$$",
+    "  visible = \\{alpha_one + alpha_two + alpha_three + alpha_four + alpha_five\\}  ",
+    "  scalable = \\left(beta_one + beta_two + beta_three + beta_four + beta_five\\right)  ",
+    "  escaped = \\(gamma_one + gamma_two + gamma_three + gamma_four + gamma_five\\)  ",
+    "$$",
+  })
+  vim.api.nvim_win_set_cursor(0, { 2, 0 })
+
+  vim.cmd("LatexMathFormat")
+
+  assert_lines({
+    "$$",
+    "visible",
+    "= \\{alpha_one + alpha_two + alpha_three + alpha_four + alpha_five\\} scalable",
+    "= \\left(beta_one + beta_two + beta_three + beta_four + beta_five\\right) escaped",
+    "= \\(gamma_one + gamma_two + gamma_three + gamma_four + gamma_five\\)",
+    "$$",
+  })
+end
+
 local failures = {}
 for name, test in pairs(tests) do
   vim.cmd("enew!")
