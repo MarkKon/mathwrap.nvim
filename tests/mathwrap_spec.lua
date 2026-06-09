@@ -421,6 +421,7 @@ tests["preserve protected text command arguments without normalization or expans
   vim.api.nvim_buf_set_lines(0, 0, -1, false, {
     "$$",
     "  label = \\text{two   spaces = stay + inline} \\quad name = \\operatorname{very   long + operator + name + stays + inline}  ",
+    "  \\quad styles = \\textrm{roman   text} + \\textit{italic   text} + \\textbf{bold   text} + \\mathrm{math   roman}  ",
     "$$",
   })
   vim.api.nvim_win_set_cursor(0, { 2, 0 })
@@ -434,6 +435,9 @@ tests["preserve protected text command arguments without normalization or expans
     "\\quad",
     "name",
     "= \\operatorname{very   long + operator + name + stays + inline}",
+    "\\quad",
+    "styles",
+    "= \\textrm{roman   text} + \\textit{italic   text} + \\textbf{bold   text} + \\mathrm{math   roman}",
     "$$",
   })
 end
