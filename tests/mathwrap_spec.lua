@@ -366,6 +366,33 @@ tests["expand list-like bracketed groups with trailing separators before additiv
   })
 end
 
+tests["keep interval atoms compact inside expandable groups"] = function()
+  reset_mathwrap()
+  require("mathwrap").setup({})
+
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, {
+    "$$",
+    "  intervals = outer((-\\infty, 0] + [0,1) + \\left[0,\\frac{1}{2}\\right) + tail_one + tail_two)  ",
+    "$$",
+  })
+  vim.api.nvim_win_set_cursor(0, { 2, 0 })
+
+  vim.cmd("LatexMathFormat")
+
+  assert_lines({
+    "$$",
+    "intervals",
+    "= outer(",
+    "  (-\\infty, 0]",
+    "  + [0,1)",
+    "  + \\left[0,\\frac{1}{2}\\right)",
+    "  + tail_one",
+    "  + tail_two",
+    ")",
+    "$$",
+  })
+end
+
 tests["expand nested raw bracketed groups recursively while preserving delimiter spelling"] = function()
   reset_mathwrap()
   require("mathwrap").setup({})

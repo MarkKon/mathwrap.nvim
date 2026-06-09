@@ -135,7 +135,176 @@ local function right_delimiter_at(text, index)
   return scalable_delimiter_at(text, index, "\\right")
 end
 
-local function raw_opener_at(text, index)
+local raw_opener_at
+local raw_closer_at
+local unsupported_opener_at
+local unsupported_closer_at
+local any_depth_opener_at
+local any_depth_closer_at
+local advance_delimiter_depth
+
+local interval_openers = {
+  ["("] = true,
+  ["["] = true,
+}
+
+local interval_closers = {
+  [")"] = true,
+  ["]"] = true,
+}
+
+local function delimiter_payload(token)
+  local payload = token:gsub("^\\left", ""):gsub("^\\right", "")
+  if #payload > 1 and payload:sub(1, 1) == "\\" then
+    return payload:sub(#payload, #payload)
+  end
+  return payload
+end
+
+local function is_interval_endpoint(text)
+  text = vim.trim(text)
+  if text == "" or #text > 28 then
+    return false
+  end
+  if text:find("[,;=]") then
+    return false
+  end
+
+  return text:match("^[%w%s_%.%+%-%*/%^{}\\]+$") ~= nil
+end
+
+local function has_one_top_level_comma(text)
+  local comma_count = 0
+  local stack = {}
+  local index = 1
+
+  while index <= #text do
+    local advanced, next_index = advance_delimiter_depth(text, index, stack)
+    if advanced then
+      index = next_index
+    elseif #stack == 0 and text:sub(index, index) == "," then
+      comma_count = comma_count + 1
+      if comma_count > 1 then
+        return false
+      end
+      index = index + 1
+    else
+      index = index + 1
+    end
+  end
+
+  return comma_count == 1
+end
+
+local function find_interval_comma(text)
+  local stack = {}
+  local index = 1
+
+  while index <= #text do
+    local advanced, next_index = advance_delimiter_depth(text, index, stack)
+    if advanced then
+      index = next_index
+    elseif #stack == 0 and text:sub(index, index) == "," then
+      return index
+    else
+      index = index + 1
+    end
+  end
+
+  return nil
+end
+
+local function is_interval_inner(text)
+  if not has_one_top_level_comma(text) then
+    return false
+  end
+
+  local comma = find_interval_comma(text)
+  return comma ~= nil and is_interval_endpoint(text:sub(1, comma - 1)) and is_interval_endpoint(text:sub(comma + 1))
+end
+
+local function raw_interval_atom_at(text, index)
+  local opener = raw_opener_at(text, index)
+  if not opener or not interval_openers[opener.opener] then
+    return nil
+  end
+
+  local stack = {}
+  local cursor = opener.finish + 1
+  while cursor <= #text do
+    local nested_opener = raw_opener_at(text, cursor)
+    local closer = raw_closer_at(text, cursor)
+    local unsupported_opener = unsupported_opener_at(text, cursor)
+    local unsupported_closer = unsupported_closer_at(text, cursor)
+
+    if unsupported_opener then
+      table.insert(stack, { unsupported = true })
+      cursor = unsupported_opener.finish + 1
+    elseif unsupported_closer and #stack > 0 and stack[#stack].unsupported then
+      table.remove(stack)
+      cursor = unsupported_closer.finish + 1
+    elseif nested_opener then
+      table.insert(stack, { closer = nested_opener.expected_closer, unsupported = false })
+      cursor = nested_opener.finish + 1
+    elseif closer and #stack > 0 then
+      if not stack[#stack].unsupported and closer.closer ~= stack[#stack].closer then
+        return nil
+      end
+      table.remove(stack)
+      cursor = closer.finish + 1
+    elseif closer and #stack == 0 then
+      local inner = text:sub(opener.finish + 1, closer.start - 1)
+      if interval_closers[closer.closer] and is_interval_inner(inner) then
+        return { start = opener.start, finish = closer.finish, token = text:sub(opener.start, closer.finish) }
+      end
+      return nil
+    else
+      cursor = cursor + 1
+    end
+  end
+
+  return nil
+end
+
+local function scalable_interval_atom_at(text, index)
+  local opener = left_delimiter_at(text, index)
+  if not opener or not interval_openers[delimiter_payload(opener.token)] then
+    return nil
+  end
+
+  local stack = {}
+  local cursor = opener.finish + 1
+  while cursor <= #text do
+    local nested_opener = any_depth_opener_at(text, cursor)
+    local closer = any_depth_closer_at(text, cursor)
+    local right = right_delimiter_at(text, cursor)
+
+    if right and #stack == 0 then
+      local closer_payload = delimiter_payload(right.token)
+      local inner = text:sub(opener.finish + 1, right.start - 1)
+      if interval_closers[closer_payload] and is_interval_inner(inner) then
+        return { start = opener.start, finish = right.finish, token = text:sub(opener.start, right.finish) }
+      end
+      return nil
+    elseif nested_opener then
+      table.insert(stack, { closer = nested_opener.expected_closer, unsupported = nested_opener.expected_closer == nil })
+      cursor = nested_opener.finish + 1
+    elseif closer and #stack > 0 then
+      table.remove(stack)
+      cursor = closer.finish + 1
+    else
+      cursor = cursor + 1
+    end
+  end
+
+  return nil
+end
+
+local function interval_atom_at(text, index)
+  return raw_interval_atom_at(text, index) or scalable_interval_atom_at(text, index)
+end
+
+raw_opener_at = function(text, index)
   local opener = text:sub(index, index)
   if not raw_openers[opener] or is_escaped_at(text, index) or is_attached_to_left_command(text, index) then
     return nil
@@ -150,7 +319,7 @@ local function raw_opener_at(text, index)
   }
 end
 
-local function raw_closer_at(text, index)
+raw_closer_at = function(text, index)
   local closer = text:sub(index, index)
   if not raw_closer_set[closer] or is_escaped_at(text, index) or is_attached_to_right_command(text, index) then
     return nil
@@ -164,23 +333,28 @@ local function raw_closer_at(text, index)
   }
 end
 
-local function unsupported_opener_at(text, index)
+unsupported_opener_at = function(text, index)
   return escaped_opener_at(text, index) or left_delimiter_at(text, index)
 end
 
-local function unsupported_closer_at(text, index)
+unsupported_closer_at = function(text, index)
   return escaped_closer_at(text, index) or right_delimiter_at(text, index)
 end
 
-local function any_depth_opener_at(text, index)
+any_depth_opener_at = function(text, index)
   return raw_opener_at(text, index) or unsupported_opener_at(text, index)
 end
 
-local function any_depth_closer_at(text, index)
+any_depth_closer_at = function(text, index)
   return raw_closer_at(text, index) or unsupported_closer_at(text, index)
 end
 
-local function advance_delimiter_depth(text, index, stack)
+advance_delimiter_depth = function(text, index, stack)
+  local interval_atom = interval_atom_at(text, index)
+  if interval_atom then
+    return true, interval_atom.finish + 1
+  end
+
   local unsupported_opener = unsupported_opener_at(text, index)
   local unsupported_closer = unsupported_closer_at(text, index)
   local opener = raw_opener_at(text, index)
@@ -280,12 +454,15 @@ local function find_matching_raw_closer(text, opener_token)
   local stack = { { closer = expected_closer, unsupported = false } }
   local index = opener_token.finish + 1
   while index <= #text do
+    local interval_atom = interval_atom_at(text, index)
     local nested_opener = raw_opener_at(text, index)
     local closer_token = raw_closer_at(text, index)
     local unsupported_opener = unsupported_opener_at(text, index)
     local unsupported_closer = unsupported_closer_at(text, index)
 
-    if unsupported_opener then
+    if interval_atom then
+      index = interval_atom.finish + 1
+    elseif unsupported_opener then
       table.insert(stack, { unsupported = true })
       index = unsupported_opener.finish + 1
     elseif unsupported_closer and stack[#stack].unsupported then
