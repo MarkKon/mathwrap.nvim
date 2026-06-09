@@ -745,6 +745,42 @@ tests["do not split unary signs after relations or operators inside expanded bra
   })
 end
 
+tests["do not close raw groups on closer-like characters inside unsupported spans"] = function()
+  reset_mathwrap()
+  require("mathwrap").setup({})
+
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, {
+    "$$",
+    "  visible = outer(\\{alpha ) beta\\} + gamma + delta + epsilon + zeta)  ",
+    "  scalable = outer(\\left.alpha ) beta\\right. + gamma + delta + epsilon + zeta)  ",
+    "$$",
+  })
+  vim.api.nvim_win_set_cursor(0, { 2, 0 })
+
+  vim.cmd("LatexMathFormat")
+
+  assert_lines({
+    "$$",
+    "visible",
+    "= outer(",
+    "  \\{alpha ) beta\\}",
+    "  + gamma",
+    "  + delta",
+    "  + epsilon",
+    "  + zeta",
+    ")",
+    "scalable",
+    "= outer(",
+    "  \\left.alpha ) beta\\right.",
+    "  + gamma",
+    "  + delta",
+    "  + epsilon",
+    "  + zeta",
+    ")",
+    "$$",
+  })
+end
+
 local failures = {}
 for name, test in pairs(tests) do
   vim.cmd("enew!")

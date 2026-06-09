@@ -180,6 +180,38 @@ local function any_depth_closer_at(text, index)
   return raw_closer_at(text, index) or unsupported_closer_at(text, index)
 end
 
+local function advance_delimiter_depth(text, index, stack)
+  local unsupported_opener = unsupported_opener_at(text, index)
+  local unsupported_closer = unsupported_closer_at(text, index)
+  local opener = raw_opener_at(text, index)
+  local closer = raw_closer_at(text, index)
+  local inside_unsupported = #stack > 0 and stack[#stack].unsupported
+
+  if unsupported_opener then
+    table.insert(stack, { unsupported = true })
+    return true, unsupported_opener.finish + 1
+  end
+  if unsupported_closer and inside_unsupported then
+    table.remove(stack)
+    return true, unsupported_closer.finish + 1
+  end
+  if inside_unsupported then
+    return opener ~= nil or closer ~= nil, index + 1
+  end
+  if opener then
+    table.insert(stack, { unsupported = false })
+    return true, opener.finish + 1
+  end
+  if closer then
+    if #stack > 0 then
+      table.remove(stack)
+    end
+    return true, closer.finish + 1
+  end
+
+  return false, index
+end
+
 local function has_operand_before(text, operator_index, segment_start)
   local left = vim.trim(text:sub(segment_start, operator_index - 1))
   if left == "" then
@@ -229,13 +261,24 @@ local function find_matching_raw_closer(text, opener_token)
     return nil
   end
 
-  local stack = { { closer = expected_closer } }
-  for index = opener_token.finish + 1, #text do
+  local stack = { { closer = expected_closer, unsupported = false } }
+  local index = opener_token.finish + 1
+  while index <= #text do
     local nested_opener = raw_opener_at(text, index)
     local closer_token = raw_closer_at(text, index)
-    if nested_opener then
-      table.insert(stack, { closer = nested_opener.expected_closer })
-    elseif closer_token then
+    local unsupported_opener = unsupported_opener_at(text, index)
+    local unsupported_closer = unsupported_closer_at(text, index)
+
+    if unsupported_opener then
+      table.insert(stack, { unsupported = true })
+      index = unsupported_opener.finish + 1
+    elseif unsupported_closer and stack[#stack].unsupported then
+      table.remove(stack)
+      index = unsupported_closer.finish + 1
+    elseif nested_opener and not stack[#stack].unsupported then
+      table.insert(stack, { closer = nested_opener.expected_closer, unsupported = false })
+      index = nested_opener.finish + 1
+    elseif closer_token and not stack[#stack].unsupported then
       if closer_token.closer ~= stack[#stack].closer then
         return nil
       end
@@ -243,6 +286,9 @@ local function find_matching_raw_closer(text, opener_token)
       if #stack == 0 then
         return closer_token
       end
+      index = closer_token.finish + 1
+    else
+      index = index + 1
     end
   end
 
@@ -252,19 +298,22 @@ end
 local function split_top_level_additive(text)
   local segments = {}
   local segment_start = 1
-  local depth = 0
+  local stack = {}
+  local index = 1
 
-  for index = 1, #text do
+  while index <= #text do
     local char = text:sub(index, index)
-    if any_depth_opener_at(text, index) then
-      depth = depth + 1
-    elseif any_depth_closer_at(text, index) then
-      depth = depth - 1
-    elseif depth == 0 and (char == "+" or char == "-") then
+    local advanced, next_index = advance_delimiter_depth(text, index, stack)
+    if advanced then
+      index = next_index
+    elseif #stack == 0 and (char == "+" or char == "-") then
       if has_operand_before(text, index, segment_start) and has_operand_after(text, index) then
         table.insert(segments, vim.trim(text:sub(segment_start, index - 1)))
         segment_start = index
       end
+      index = index + 1
+    else
+      index = index + 1
     end
   end
 
@@ -279,17 +328,20 @@ end
 local function split_top_level_punctuation_items(text)
   local items = {}
   local item_start = 1
-  local depth = 0
+  local stack = {}
+  local index = 1
 
-  for index = 1, #text do
+  while index <= #text do
     local char = text:sub(index, index)
-    if any_depth_opener_at(text, index) then
-      depth = depth + 1
-    elseif any_depth_closer_at(text, index) then
-      depth = depth - 1
-    elseif depth == 0 and (char == "," or char == ";") then
+    local advanced, next_index = advance_delimiter_depth(text, index, stack)
+    if advanced then
+      index = next_index
+    elseif #stack == 0 and (char == "," or char == ";") then
       table.insert(items, { text = vim.trim(text:sub(item_start, index - 1)), separator = char })
       item_start = index + 1
+      index = index + 1
+    else
+      index = index + 1
     end
   end
 
@@ -321,18 +373,13 @@ local function split_bracket_inner(text)
 end
 
 local function find_top_level_token(text, token, position)
-  local depth = 0
+  local stack = {}
   local index = position
   while index <= #text do
-    local opener = any_depth_opener_at(text, index)
-    local closer = any_depth_closer_at(text, index)
-    if opener then
-      depth = depth + 1
-      index = opener.finish + 1
-    elseif closer then
-      depth = depth - 1
-      index = closer.finish + 1
-    elseif depth == 0 and text:sub(index, index + #token - 1) == token then
+    local advanced, next_index = advance_delimiter_depth(text, index, stack)
+    if advanced then
+      index = next_index
+    elseif #stack == 0 and text:sub(index, index + #token - 1) == token then
       return index, index + #token - 1
     else
       index = index + 1
