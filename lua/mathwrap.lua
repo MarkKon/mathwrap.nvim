@@ -166,22 +166,33 @@ local function find_expandable_raw_group(line)
   return nil
 end
 
+local expand_bracketed_segment
+
+local function append_expanded_bracketed_line(output, line, indent)
+  local opener_index, closer_index, segments = find_expandable_raw_group(line)
+  if not opener_index then
+    table.insert(output, indent .. line)
+    return
+  end
+
+  local opener_prefix = vim.trim(line:sub(1, opener_index))
+  local suffix = vim.trim(line:sub(closer_index + 1))
+  table.insert(output, indent .. opener_prefix)
+  for _, segment in ipairs(segments) do
+    expand_bracketed_segment(output, segment, indent .. "  ")
+  end
+  table.insert(output, indent .. vim.trim(line:sub(closer_index, closer_index) .. (suffix ~= "" and (" " .. suffix) or "")))
+end
+
+expand_bracketed_segment = function(output, segment, indent)
+  append_expanded_bracketed_line(output, segment, indent)
+end
+
 local function expand_bracketed_expressions(lines)
   local expanded = {}
 
   for _, line in ipairs(lines) do
-    local opener_index, closer_index, segments = find_expandable_raw_group(line)
-    if not opener_index then
-      table.insert(expanded, line)
-    else
-      local opener_prefix = vim.trim(line:sub(1, opener_index))
-      local suffix = vim.trim(line:sub(closer_index + 1))
-      table.insert(expanded, opener_prefix)
-      for _, segment in ipairs(segments) do
-        table.insert(expanded, "  " .. segment)
-      end
-      table.insert(expanded, vim.trim(line:sub(closer_index, closer_index) .. (suffix ~= "" and (" " .. suffix) or "")))
-    end
+    append_expanded_bracketed_line(expanded, line, "")
   end
 
   return expanded

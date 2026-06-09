@@ -366,6 +366,37 @@ tests["expand list-like bracketed groups with trailing separators before additiv
   })
 end
 
+tests["expand nested raw bracketed groups recursively while preserving delimiter spelling"] = function()
+  reset_mathwrap()
+  require("mathwrap").setup({})
+
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, {
+    "$$",
+    "  result = wrap(first_term + inner{alpha_one + alpha_two + alpha_three + alpha_four + alpha_five} + last_term)  ",
+    "$$",
+  })
+  vim.api.nvim_win_set_cursor(0, { 2, 0 })
+
+  vim.cmd("LatexMathFormat")
+
+  assert_lines({
+    "$$",
+    "result",
+    "= wrap(",
+    "  first_term",
+    "  + inner{",
+    "    alpha_one",
+    "    + alpha_two",
+    "    + alpha_three",
+    "    + alpha_four",
+    "    + alpha_five",
+    "  }",
+    "  + last_term",
+    ")",
+    "$$",
+  })
+end
+
 local failures = {}
 for name, test in pairs(tests) do
   vim.cmd("enew!")
