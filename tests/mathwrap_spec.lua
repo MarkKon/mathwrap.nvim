@@ -685,6 +685,28 @@ tests["do not split inside general scalable delimiter spans"] = function()
   })
 end
 
+tests["do not treat arrow commands as scalable delimiter commands"] = function()
+  reset_mathwrap()
+  require("mathwrap").setup({})
+
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, {
+    "$$",
+    "  a \\leftarrow b = c \\rightarrow d = e  ",
+    "$$",
+  })
+  vim.api.nvim_win_set_cursor(0, { 2, 0 })
+
+  vim.cmd("LatexMathFormat")
+
+  assert_lines({
+    "$$",
+    "a \\leftarrow b",
+    "= c \\rightarrow d",
+    "= e",
+    "$$",
+  })
+end
+
 local failures = {}
 for name, test in pairs(tests) do
   vim.cmd("enew!")

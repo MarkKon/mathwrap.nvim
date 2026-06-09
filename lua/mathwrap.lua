@@ -116,6 +116,8 @@ local function scalable_delimiter_at(text, index, command)
     if finish < delimiter_start + 1 then
       finish = delimiter_start + 1
     end
+  elseif delimiter:match("[%a]") then
+    return nil
   end
 
   return {
