@@ -544,6 +544,39 @@ tests["keep expanded closers alone before suffixes and later groups"] = function
   })
 end
 
+tests["do not split relations or clause separators inside raw bracket groups before expansion"] = function()
+  reset_mathwrap()
+  require("mathwrap").setup({})
+
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, {
+    "$$",
+    "  relation = outer(alpha = beta + gamma = delta + epsilon = zeta + eta = theta)  ",
+    "  clause = outer(left_one \\quad right_one + left_two \\quad right_two + left_three \\quad right_three)  ",
+    "$$",
+  })
+  vim.api.nvim_win_set_cursor(0, { 2, 0 })
+
+  vim.cmd("LatexMathFormat")
+
+  assert_lines({
+    "$$",
+    "relation",
+    "= outer(",
+    "  alpha = beta",
+    "  + gamma = delta",
+    "  + epsilon = zeta",
+    "  + eta = theta",
+    ")",
+    "clause",
+    "= outer(",
+    "  left_one \\quad right_one",
+    "  + left_two \\quad right_two",
+    "  + left_three \\quad right_three",
+    ")",
+    "$$",
+  })
+end
+
 local failures = {}
 for name, test in pairs(tests) do
   vim.cmd("enew!")

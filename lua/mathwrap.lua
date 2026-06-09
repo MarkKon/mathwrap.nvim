@@ -217,6 +217,28 @@ local function split_bracket_inner(text)
   return split_top_level_additive(text)
 end
 
+local function find_top_level_token(text, token, position)
+  local depth = 0
+  local index = position
+  while index <= #text do
+    local opener = raw_opener_at(text, index)
+    local closer = raw_closer_at(text, index)
+    if opener then
+      depth = depth + 1
+      index = opener.finish + 1
+    elseif closer then
+      depth = depth - 1
+      index = closer.finish + 1
+    elseif depth == 0 and text:sub(index, index + #token - 1) == token then
+      return index, index + #token - 1
+    else
+      index = index + 1
+    end
+  end
+
+  return nil
+end
+
 local function find_expandable_raw_group(line)
   if #line <= 60 then
     return nil
@@ -275,13 +297,13 @@ local function expand_bracketed_expressions(lines)
 end
 
 local function find_next_equation_relation(body, position)
-  local leq_start, leq_end = body:find("(\\leq)", position)
-  local geq_start, geq_end = body:find("(\\geq)", position)
-  local eq_start, eq_end = body:find("(=)", position)
+  local leq_start, leq_end = find_top_level_token(body, "\\leq", position)
+  local geq_start, geq_end = find_top_level_token(body, "\\geq", position)
+  local eq_start, eq_end = find_top_level_token(body, "=", position)
 
   local relation_start, relation_end, relation
   for _, candidate in ipairs({
-    { start = body:find(":=", position, true), token = ":=" },
+    { start = find_top_level_token(body, ":=", position), token = ":=" },
     { start = leq_start, finish = leq_end, token = "\\leq" },
     { start = geq_start, finish = geq_end, token = "\\geq" },
     { start = eq_start, finish = eq_end, token = "=" },
@@ -330,7 +352,7 @@ end
 local function find_next_clause_separator(body, position)
   local separator_start, separator_end, separator
   for _, token in ipairs({ "\\implies", "\\qquad", "\\quad", "\\iff" }) do
-    local start_index, end_index = body:find(token, position, true)
+    local start_index, end_index = find_top_level_token(body, token, position)
     if start_index and (not separator_start or start_index < separator_start) then
       separator_start = start_index
       separator_end = end_index
