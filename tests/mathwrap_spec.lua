@@ -581,15 +581,13 @@ tests["expand raw bracketed expressions idempotently"] = function()
   })
 end
 
-tests["do not expand visible or scalable delimiter groups in raw delimiter slice"] = function()
+tests["expand visible brace delimiter groups while preserving escaped tokens"] = function()
   reset_mathwrap()
   require("mathwrap").setup({})
 
   vim.api.nvim_buf_set_lines(0, 0, -1, false, {
     "$$",
     "  visible = \\{alpha_one + alpha_two + alpha_three + alpha_four + alpha_five\\}  ",
-    "  scalable = \\left(beta_one + beta_two + beta_three + beta_four + beta_five\\right)  ",
-    "  escaped = \\(gamma_one + gamma_two + gamma_three + gamma_four + gamma_five\\)  ",
     "$$",
   })
   vim.api.nvim_win_set_cursor(0, { 2, 0 })
@@ -599,9 +597,13 @@ tests["do not expand visible or scalable delimiter groups in raw delimiter slice
   assert_lines({
     "$$",
     "visible",
-    "= \\{alpha_one + alpha_two + alpha_three + alpha_four + alpha_five\\} scalable",
-    "= \\left(beta_one + beta_two + beta_three + beta_four + beta_five\\right) escaped",
-    "= \\(gamma_one + gamma_two + gamma_three + gamma_four + gamma_five\\)",
+    "= \\{",
+    "  alpha_one",
+    "  + alpha_two",
+    "  + alpha_three",
+    "  + alpha_four",
+    "  + alpha_five",
+    "\\}",
     "$$",
   })
 end
@@ -932,7 +934,7 @@ tests["do not close raw groups on closer-like characters inside unsupported span
   })
 end
 
-tests["do not expand raw groups inside unsupported delimiter spans"] = function()
+tests["expand visible delimiter spans while preserving unsupported scalable spans"] = function()
   reset_mathwrap()
   require("mathwrap").setup({})
 
@@ -951,10 +953,24 @@ tests["do not expand raw groups inside unsupported delimiter spans"] = function(
   assert_lines({
     "$$",
     "visible",
-    "= \\{inner(alpha_one + alpha_two + alpha_three + alpha_four + alpha_five)\\} scalable",
+    "= \\{inner(",
+    "  alpha_one",
+    "  + alpha_two",
+    "  + alpha_three",
+    "  + alpha_four",
+    "  + alpha_five",
+    ")",
+    "\\} scalable",
     "= \\left.inner(alpha_one + alpha_two + alpha_three + alpha_four + alpha_five)\\right. outer",
     "= wrap(",
-    "  \\{inner(alpha_one + alpha_two + alpha_three + alpha_four + alpha_five)\\}",
+    "  \\{inner(",
+    "    alpha_one",
+    "    + alpha_two",
+    "    + alpha_three",
+    "    + alpha_four",
+    "    + alpha_five",
+    "  )",
+    "  \\}",
     "  + gamma",
     "  + delta",
     "  + epsilon",

@@ -179,6 +179,7 @@ local function escaped_opener_at(text, index)
     start = index - 1,
     finish = index,
     token = text:sub(index - 1, index),
+    kind = "escaped",
     opener = opener,
     expected_closer = raw_closers[opener],
   }
@@ -194,6 +195,7 @@ local function escaped_closer_at(text, index)
     start = index - 1,
     finish = index,
     token = text:sub(index - 1, index),
+    kind = "escaped",
     closer = closer,
   }
 end
@@ -432,6 +434,7 @@ raw_opener_at = function(text, index)
     start = index,
     finish = index,
     token = opener,
+    kind = "raw",
     opener = opener,
     expected_closer = raw_closers[opener],
   }
@@ -447,24 +450,25 @@ raw_closer_at = function(text, index)
     start = index,
     finish = index,
     token = closer,
+    kind = "raw",
     closer = closer,
   }
 end
 
 unsupported_opener_at = function(text, index)
-  return escaped_opener_at(text, index) or left_delimiter_at(text, index)
+  return left_delimiter_at(text, index)
 end
 
 unsupported_closer_at = function(text, index)
-  return escaped_closer_at(text, index) or right_delimiter_at(text, index)
+  return right_delimiter_at(text, index)
 end
 
 any_depth_opener_at = function(text, index)
-  return raw_opener_at(text, index) or unsupported_opener_at(text, index)
+  return raw_opener_at(text, index) or escaped_opener_at(text, index) or unsupported_opener_at(text, index)
 end
 
 any_depth_closer_at = function(text, index)
-  return raw_closer_at(text, index) or unsupported_closer_at(text, index)
+  return raw_closer_at(text, index) or escaped_closer_at(text, index) or unsupported_closer_at(text, index)
 end
 
 advance_delimiter_depth = function(text, index, stack)
@@ -475,8 +479,8 @@ advance_delimiter_depth = function(text, index, stack)
 
   local unsupported_opener = unsupported_opener_at(text, index)
   local unsupported_closer = unsupported_closer_at(text, index)
-  local opener = raw_opener_at(text, index)
-  local closer = raw_closer_at(text, index)
+  local opener = raw_opener_at(text, index) or escaped_opener_at(text, index)
+  local closer = raw_closer_at(text, index) or escaped_closer_at(text, index)
   local inside_unsupported = #stack > 0 and stack[#stack].unsupported
 
   if unsupported_opener then
@@ -491,11 +495,11 @@ advance_delimiter_depth = function(text, index, stack)
     return opener ~= nil or closer ~= nil, index + 1
   end
   if opener then
-    table.insert(stack, { unsupported = false })
+    table.insert(stack, { closer = opener.expected_closer, kind = opener.kind, unsupported = false })
     return true, opener.finish + 1
   end
   if closer then
-    if #stack > 0 then
+    if #stack > 0 and closer.kind == stack[#stack].kind and closer.closer == stack[#stack].closer then
       table.remove(stack)
     end
     return true, closer.finish + 1
@@ -562,19 +566,18 @@ local function has_operand_after(text, operator_index)
   return true
 end
 
-local function find_matching_raw_closer(text, opener_token)
-  local opener = opener_token.opener
-  local expected_closer = raw_closers[opener]
+local function find_matching_closer(text, opener_token)
+  local expected_closer = opener_token.expected_closer
   if not expected_closer then
     return nil
   end
 
-  local stack = { { closer = expected_closer, unsupported = false } }
+  local stack = { { closer = expected_closer, kind = opener_token.kind, unsupported = false } }
   local index = opener_token.finish + 1
   while index <= #text do
     local interval_atom = interval_atom_at(text, index)
-    local nested_opener = raw_opener_at(text, index)
-    local closer_token = raw_closer_at(text, index)
+    local nested_opener = raw_opener_at(text, index) or escaped_opener_at(text, index)
+    local closer_token = raw_closer_at(text, index) or escaped_closer_at(text, index)
     local unsupported_opener = unsupported_opener_at(text, index)
     local unsupported_closer = unsupported_closer_at(text, index)
 
@@ -587,17 +590,20 @@ local function find_matching_raw_closer(text, opener_token)
       table.remove(stack)
       index = unsupported_closer.finish + 1
     elseif nested_opener and not stack[#stack].unsupported then
-      table.insert(stack, { closer = nested_opener.expected_closer, unsupported = false })
+      table.insert(stack, { closer = nested_opener.expected_closer, kind = nested_opener.kind, unsupported = false })
       index = nested_opener.finish + 1
     elseif closer_token and not stack[#stack].unsupported then
-      if closer_token.closer ~= stack[#stack].closer then
+      if closer_token.kind ~= stack[#stack].kind then
+        index = closer_token.finish + 1
+      elseif closer_token.closer ~= stack[#stack].closer then
         return nil
+      else
+        table.remove(stack)
+        if #stack == 0 then
+          return closer_token
+        end
+        index = closer_token.finish + 1
       end
-      table.remove(stack)
-      if #stack == 0 then
-        return closer_token
-      end
-      index = closer_token.finish + 1
     else
       index = index + 1
     end
@@ -700,7 +706,7 @@ local function find_top_level_token(text, token, position)
   return nil
 end
 
-local function find_expandable_raw_group(line)
+local function find_expandable_group(line)
   if #line <= 60 then
     return nil
   end
@@ -713,7 +719,7 @@ local function find_expandable_raw_group(line)
     if advanced then
       opener_index = next_index
     elseif #stack == 0 then
-      opener_token = raw_opener_at(line, opener_index)
+      opener_token = raw_opener_at(line, opener_index) or escaped_opener_at(line, opener_index)
       if not opener_token then
         opener_index = opener_index + 1
       end
@@ -722,7 +728,7 @@ local function find_expandable_raw_group(line)
     end
 
     if opener_token then
-      local closer_token = find_matching_raw_closer(line, opener_token)
+      local closer_token = find_matching_closer(line, opener_token)
       if closer_token then
         local inner = vim.trim(line:sub(opener_token.finish + 1, closer_token.start - 1))
         local segments = split_bracket_inner(inner)
@@ -740,7 +746,7 @@ end
 local expand_bracketed_segment
 
 local function append_expanded_bracketed_line(output, line, indent)
-  local opener_token, closer_token, segments = find_expandable_raw_group(line)
+  local opener_token, closer_token, segments = find_expandable_group(line)
   if not opener_token then
     table.insert(output, indent .. line)
     return
