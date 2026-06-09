@@ -24,32 +24,42 @@ local function find_enclosing_display_math_block(bufnr, cursor_line)
   return nil
 end
 
+local function normalize_math_body(lines)
+  return vim.trim(table.concat(lines, " "):gsub("%s+", " "))
+end
+
+local function find_next_equation_relation(body, position)
+  local leq_start, leq_end = body:find("(\\leq)", position)
+  local geq_start, geq_end = body:find("(\\geq)", position)
+  local eq_start, eq_end = body:find("(=)", position)
+
+  local relation_start, relation_end, relation
+  for _, candidate in ipairs({
+    { start = body:find(":=", position, true), token = ":=" },
+    { start = leq_start, finish = leq_end, token = "\\leq" },
+    { start = geq_start, finish = geq_end, token = "\\geq" },
+    { start = eq_start, finish = eq_end, token = "=" },
+  }) do
+    if candidate.start and (not relation_start or candidate.start < relation_start) then
+      relation_start = candidate.start
+      relation = candidate.token
+      relation_end = candidate.finish or (candidate.start + #candidate.token - 1)
+    end
+  end
+
+  return relation_start, relation_end, relation
+end
+
 local function format_math_body(lines)
-  local body = vim.trim(table.concat(lines, " "):gsub("%s+", " "))
+  local body = normalize_math_body(lines)
   if body == "" then
-    return { "" }
+    return #lines == 0 and {} or { "" }
   end
 
   local formatted = {}
   local position = 1
   while position <= #body do
-    local leq_start, leq_end = body:find("(\\leq)", position)
-    local geq_start, geq_end = body:find("(\\geq)", position)
-    local eq_start, eq_end = body:find("(=)", position)
-
-    local relation_start, relation_end, relation
-    for _, candidate in ipairs({
-      { start = body:find(":=", position, true), token = ":=" },
-      { start = leq_start, finish = leq_end, token = "\\leq" },
-      { start = geq_start, finish = geq_end, token = "\\geq" },
-      { start = eq_start, finish = eq_end, token = "=" },
-    }) do
-      if candidate.start and (not relation_start or candidate.start < relation_start) then
-        relation_start = candidate.start
-        relation = candidate.token
-        relation_end = candidate.finish or (candidate.start + #candidate.token - 1)
-      end
-    end
+    local relation_start, relation_end, relation = find_next_equation_relation(body, position)
 
     if not relation_start then
       local segment = vim.trim(body:sub(position))
