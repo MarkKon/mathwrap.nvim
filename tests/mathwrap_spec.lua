@@ -267,6 +267,28 @@ tests["format spacing clause separators as standalone lines"] = function()
   })
 end
 
+tests["keep compact membership relations inline by default"] = function()
+  reset_mathwrap()
+  require("mathwrap").setup({})
+
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, {
+    "$$",
+    "  z\\sim\\pi",
+    "  x\\in A",
+    "  f:X\\to Y  ",
+    "$$",
+  })
+  vim.api.nvim_win_set_cursor(0, { 2, 0 })
+
+  vim.cmd("LatexMathFormat")
+
+  assert_lines({
+    "$$",
+    "z\\sim\\pi x\\in A f:X\\to Y",
+    "$$",
+  })
+end
+
 local failures = {}
 for name, test in pairs(tests) do
   vim.cmd("enew!")
