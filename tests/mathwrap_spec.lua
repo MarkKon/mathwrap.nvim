@@ -338,6 +338,34 @@ tests["expand long parenthesized sums with leading operator lines"] = function()
   })
 end
 
+tests["expand list-like bracketed groups with trailing separators before additive splits"] = function()
+  reset_mathwrap()
+  require("mathwrap").setup({})
+
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, {
+    "$$",
+    "  values = [alpha_one + alpha_two, beta_one + beta_two, gamma_one + gamma_two]  ",
+    "$$",
+  })
+  vim.api.nvim_win_set_cursor(0, { 2, 0 })
+
+  vim.cmd("LatexMathFormat")
+
+  assert_lines({
+    "$$",
+    "values",
+    "= [",
+    "  alpha_one",
+    "  + alpha_two,",
+    "  beta_one",
+    "  + beta_two,",
+    "  gamma_one",
+    "  + gamma_two",
+    "]",
+    "$$",
+  })
+end
+
 local failures = {}
 for name, test in pairs(tests) do
   vim.cmd("enew!")

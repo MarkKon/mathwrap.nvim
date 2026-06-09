@@ -101,6 +101,50 @@ local function split_top_level_additive(text)
   return segments
 end
 
+local function split_top_level_punctuation_items(text)
+  local items = {}
+  local item_start = 1
+  local depth = 0
+
+  for index = 1, #text do
+    local char = text:sub(index, index)
+    if raw_openers[char] then
+      depth = depth + 1
+    elseif raw_closer_set[char] then
+      depth = depth - 1
+    elseif depth == 0 and (char == "," or char == ";") then
+      table.insert(items, { text = vim.trim(text:sub(item_start, index - 1)), separator = char })
+      item_start = index + 1
+    end
+  end
+
+  if #items < 2 then
+    return nil
+  end
+
+  table.insert(items, { text = vim.trim(text:sub(item_start)), separator = "" })
+  return items
+end
+
+local function split_bracket_inner(text)
+  local items = split_top_level_punctuation_items(text)
+  if items then
+    local lines = {}
+    for _, item in ipairs(items) do
+      local item_segments = split_top_level_additive(item.text) or { item.text }
+      if item.separator ~= "" then
+        item_segments[#item_segments] = item_segments[#item_segments] .. item.separator
+      end
+      for _, segment in ipairs(item_segments) do
+        table.insert(lines, segment)
+      end
+    end
+    return lines
+  end
+
+  return split_top_level_additive(text)
+end
+
 local function find_expandable_raw_group(line)
   if #line <= 60 then
     return nil
@@ -111,7 +155,7 @@ local function find_expandable_raw_group(line)
       local closer_index = find_matching_raw_closer(line, opener_index)
       if closer_index then
         local inner = vim.trim(line:sub(opener_index + 1, closer_index - 1))
-        local segments = split_top_level_additive(inner)
+        local segments = split_bracket_inner(inner)
         if segments then
           return opener_index, closer_index, segments
         end
