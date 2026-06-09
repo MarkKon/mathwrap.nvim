@@ -577,6 +577,29 @@ tests["do not split relations or clause separators inside raw bracket groups bef
   })
 end
 
+tests["do not split relations or clause separators inside unsupported delimiter groups"] = function()
+  reset_mathwrap()
+  require("mathwrap").setup({})
+
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, {
+    "$$",
+    "  visible = \\{alpha = beta \\quad gamma = delta\\}  ",
+    "  scalable = \\left(alpha = beta \\quad gamma = delta\\right)  ",
+    "$$",
+  })
+  vim.api.nvim_win_set_cursor(0, { 2, 0 })
+
+  vim.cmd("LatexMathFormat")
+
+  assert_lines({
+    "$$",
+    "visible",
+    "= \\{alpha = beta \\quad gamma = delta\\} scalable",
+    "= \\left(alpha = beta \\quad gamma = delta\\right)",
+    "$$",
+  })
+end
+
 local failures = {}
 for name, test in pairs(tests) do
   vim.cmd("enew!")

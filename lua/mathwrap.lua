@@ -65,6 +65,74 @@ local function is_attached_to_right_command(text, index)
   return text:sub(math.max(1, index - 6), index - 1) == "\\right"
 end
 
+local function escaped_opener_at(text, index)
+  local opener = text:sub(index, index)
+  if not raw_openers[opener] or not is_escaped_at(text, index) then
+    return nil
+  end
+
+  return {
+    start = index - 1,
+    finish = index,
+    token = text:sub(index - 1, index),
+    opener = opener,
+    expected_closer = raw_closers[opener],
+  }
+end
+
+local function escaped_closer_at(text, index)
+  local closer = text:sub(index, index)
+  if not raw_closer_set[closer] or not is_escaped_at(text, index) then
+    return nil
+  end
+
+  return {
+    start = index - 1,
+    finish = index,
+    token = text:sub(index - 1, index),
+    closer = closer,
+  }
+end
+
+local function left_delimiter_at(text, index)
+  if text:sub(index, index + 4) ~= "\\left" then
+    return nil
+  end
+
+  local delimiter_index = index + 5
+  local delimiter = text:sub(delimiter_index, delimiter_index)
+  if not raw_openers[delimiter] then
+    return nil
+  end
+
+  return {
+    start = index,
+    finish = delimiter_index,
+    token = text:sub(index, delimiter_index),
+    opener = delimiter,
+    expected_closer = raw_closers[delimiter],
+  }
+end
+
+local function right_delimiter_at(text, index)
+  if text:sub(index, index + 5) ~= "\\right" then
+    return nil
+  end
+
+  local delimiter_index = index + 6
+  local delimiter = text:sub(delimiter_index, delimiter_index)
+  if not raw_closer_set[delimiter] then
+    return nil
+  end
+
+  return {
+    start = index,
+    finish = delimiter_index,
+    token = text:sub(index, delimiter_index),
+    closer = delimiter,
+  }
+end
+
 local function raw_opener_at(text, index)
   local opener = text:sub(index, index)
   if not raw_openers[opener] or is_escaped_at(text, index) or is_attached_to_left_command(text, index) then
@@ -92,6 +160,14 @@ local function raw_closer_at(text, index)
     token = closer,
     closer = closer,
   }
+end
+
+local function unsupported_opener_at(text, index)
+  return escaped_opener_at(text, index) or left_delimiter_at(text, index)
+end
+
+local function unsupported_closer_at(text, index)
+  return escaped_closer_at(text, index) or right_delimiter_at(text, index)
 end
 
 local function has_operand_before(text, operator_index, segment_start)
@@ -223,12 +299,20 @@ local function find_top_level_token(text, token, position)
   while index <= #text do
     local opener = raw_opener_at(text, index)
     local closer = raw_closer_at(text, index)
+    local unsupported_opener = unsupported_opener_at(text, index)
+    local unsupported_closer = unsupported_closer_at(text, index)
     if opener then
       depth = depth + 1
       index = opener.finish + 1
     elseif closer then
       depth = depth - 1
       index = closer.finish + 1
+    elseif unsupported_opener then
+      depth = depth + 1
+      index = unsupported_opener.finish + 1
+    elseif unsupported_closer then
+      depth = depth - 1
+      index = unsupported_closer.finish + 1
     elseif depth == 0 and text:sub(index, index + #token - 1) == token then
       return index, index + #token - 1
     else
