@@ -781,6 +781,46 @@ tests["do not close raw groups on closer-like characters inside unsupported span
   })
 end
 
+tests["do not expand raw groups inside unsupported delimiter spans"] = function()
+  reset_mathwrap()
+  require("mathwrap").setup({})
+
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, {
+    "$$",
+    "  visible = \\{inner(alpha_one + alpha_two + alpha_three + alpha_four + alpha_five)\\}  ",
+    "  scalable = \\left.inner(alpha_one + alpha_two + alpha_three + alpha_four + alpha_five)\\right.  ",
+    "  outer = wrap(\\{inner(alpha_one + alpha_two + alpha_three + alpha_four + alpha_five)\\} + gamma + delta + epsilon + zeta)  ",
+    "  outer_scalable = wrap(\\left.inner(alpha_one + alpha_two + alpha_three + alpha_four + alpha_five)\\right. + gamma + delta + epsilon + zeta)  ",
+    "$$",
+  })
+  vim.api.nvim_win_set_cursor(0, { 2, 0 })
+
+  vim.cmd("LatexMathFormat")
+
+  assert_lines({
+    "$$",
+    "visible",
+    "= \\{inner(alpha_one + alpha_two + alpha_three + alpha_four + alpha_five)\\} scalable",
+    "= \\left.inner(alpha_one + alpha_two + alpha_three + alpha_four + alpha_five)\\right. outer",
+    "= wrap(",
+    "  \\{inner(alpha_one + alpha_two + alpha_three + alpha_four + alpha_five)\\}",
+    "  + gamma",
+    "  + delta",
+    "  + epsilon",
+    "  + zeta",
+    ")",
+    "outer_scalable",
+    "= wrap(",
+    "  \\left.inner(alpha_one + alpha_two + alpha_three + alpha_four + alpha_five)\\right.",
+    "  + gamma",
+    "  + delta",
+    "  + epsilon",
+    "  + zeta",
+    ")",
+    "$$",
+  })
+end
+
 local failures = {}
 for name, test in pairs(tests) do
   vim.cmd("enew!")

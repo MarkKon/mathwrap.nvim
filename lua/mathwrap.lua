@@ -212,6 +212,22 @@ local function advance_delimiter_depth(text, index, stack)
   return false, index
 end
 
+local function advance_unsupported_depth(text, index, stack)
+  local unsupported_opener = unsupported_opener_at(text, index)
+  local unsupported_closer = unsupported_closer_at(text, index)
+
+  if unsupported_opener then
+    table.insert(stack, { unsupported = true })
+    return true, unsupported_opener.finish + 1
+  end
+  if unsupported_closer and #stack > 0 then
+    table.remove(stack)
+    return true, unsupported_closer.finish + 1
+  end
+
+  return false, index
+end
+
 local function has_operand_before(text, operator_index, segment_start)
   local left = vim.trim(text:sub(segment_start, operator_index - 1))
   if left == "" then
@@ -394,8 +410,22 @@ local function find_expandable_raw_group(line)
     return nil
   end
 
-  for opener_index = 1, #line do
-    local opener_token = raw_opener_at(line, opener_index)
+  local stack = {}
+  local opener_index = 1
+  while opener_index <= #line do
+    local advanced, next_index = advance_unsupported_depth(line, opener_index, stack)
+    local opener_token = nil
+    if advanced then
+      opener_index = next_index
+    elseif #stack == 0 then
+      opener_token = raw_opener_at(line, opener_index)
+      if not opener_token then
+        opener_index = opener_index + 1
+      end
+    else
+      opener_index = opener_index + 1
+    end
+
     if opener_token then
       local closer_token = find_matching_raw_closer(line, opener_token)
       if closer_token then
@@ -405,6 +435,7 @@ local function find_expandable_raw_group(line)
           return opener_token, closer_token, segments
         end
       end
+      opener_index = opener_token.finish + 1
     end
   end
 
