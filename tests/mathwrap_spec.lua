@@ -608,6 +608,38 @@ tests["expand visible brace delimiter groups while preserving escaped tokens"] =
   })
 end
 
+tests["preserve escaped math delimiters without treating them as visible delimiter groups"] = function()
+  reset_mathwrap()
+  require("mathwrap").setup({})
+
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, {
+    "$$",
+    "  visible = \\{alpha_one + alpha_two + alpha_three + alpha_four + alpha_five\\}  ",
+    "  paren = \\(beta_one + beta_two + beta_three + beta_four + beta_five\\)  ",
+    "  bracket = \\[gamma_one + gamma_two + gamma_three + gamma_four + gamma_five\\]  ",
+    "$$",
+  })
+  vim.api.nvim_win_set_cursor(0, { 2, 0 })
+
+  vim.cmd("LatexMathFormat")
+
+  assert_lines({
+    "$$",
+    "visible",
+    "= \\{",
+    "  alpha_one",
+    "  + alpha_two",
+    "  + alpha_three",
+    "  + alpha_four",
+    "  + alpha_five",
+    "\\}",
+    "paren",
+    "= \\(beta_one + beta_two + beta_three + beta_four + beta_five\\) bracket",
+    "= \\[gamma_one + gamma_two + gamma_three + gamma_four + gamma_five\\]",
+    "$$",
+  })
+end
+
 tests["expand vertical delimiter pairs without treating bars as clause separators"] = function()
   reset_mathwrap()
   require("mathwrap").setup({})

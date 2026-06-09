@@ -171,7 +171,7 @@ end
 
 local function escaped_opener_at(text, index)
   local opener = text:sub(index, index)
-  if not raw_openers[opener] or not is_escaped_at(text, index) then
+  if opener ~= "{" or not is_escaped_at(text, index) then
     return nil
   end
 
@@ -187,7 +187,7 @@ end
 
 local function escaped_closer_at(text, index)
   local closer = text:sub(index, index)
-  if not raw_closer_set[closer] or not is_escaped_at(text, index) then
+  if closer ~= "}" or not is_escaped_at(text, index) then
     return nil
   end
 
