@@ -438,6 +438,34 @@ tests["preserve protected text command arguments without normalization or expans
   })
 end
 
+tests["expand long non-text braced command arguments"] = function()
+  reset_mathwrap()
+  require("mathwrap").setup({})
+
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, {
+    "$$",
+    "  value = \\frac{alpha_one + alpha_two + alpha_three + alpha_four + alpha_five}{denominator}  ",
+    "$$",
+  })
+  vim.api.nvim_win_set_cursor(0, { 2, 0 })
+
+  vim.cmd("LatexMathFormat")
+
+  assert_lines({
+    "$$",
+    "value",
+    "= \\frac{",
+    "  alpha_one",
+    "  + alpha_two",
+    "  + alpha_three",
+    "  + alpha_four",
+    "  + alpha_five",
+    "}",
+    "{denominator}",
+    "$$",
+  })
+end
+
 tests["expand nested raw bracketed groups recursively while preserving delimiter spelling"] = function()
   reset_mathwrap()
   require("mathwrap").setup({})
