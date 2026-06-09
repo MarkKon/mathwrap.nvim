@@ -1096,6 +1096,34 @@ tests["do not split unary signs after relations or operators inside expanded bra
   })
 end
 
+tests["preserve compact additive operator spacing inside expanded brackets"] = function()
+  reset_mathwrap()
+  require("mathwrap").setup({})
+
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, {
+    "$$",
+    "  compact = outer(alpha_one+beta_two+gamma_three+delta_four+epsilon_five+zeta_six)  ",
+    "$$",
+  })
+  vim.api.nvim_win_set_cursor(0, { 2, 0 })
+
+  vim.cmd("LatexMathFormat")
+
+  assert_lines({
+    "$$",
+    "compact",
+    "= outer(",
+    "  alpha_one",
+    "  +beta_two",
+    "  +gamma_three",
+    "  +delta_four",
+    "  +epsilon_five",
+    "  +zeta_six",
+    ")",
+    "$$",
+  })
+end
+
 tests["do not close raw groups on closer-like characters inside unsupported spans"] = function()
   reset_mathwrap()
   require("mathwrap").setup({})
