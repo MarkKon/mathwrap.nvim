@@ -190,6 +190,35 @@ tests["format inequality chains with leading operator lines"] = function()
   })
 end
 
+tests["format relation chains idempotently"] = function()
+  reset_mathwrap()
+  require("mathwrap").setup({})
+
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, {
+    "$$",
+    "  a=b\\leq c:=d\\geq e  ",
+    "$$",
+  })
+  vim.api.nvim_win_set_cursor(0, { 2, 0 })
+
+  vim.cmd("LatexMathFormat")
+  local once = vim.api.nvim_buf_get_lines(0, 0, -1, false)
+
+  vim.cmd("LatexMathFormat")
+  local twice = vim.api.nvim_buf_get_lines(0, 0, -1, false)
+
+  assert(vim.deep_equal(twice, once), ("expected idempotent output, got %s then %s"):format(vim.inspect(once), vim.inspect(twice)))
+  assert_lines({
+    "$$",
+    "a",
+    "= b",
+    "\\leq c",
+    ":= d",
+    "\\geq e",
+    "$$",
+  })
+end
+
 local failures = {}
 for name, test in pairs(tests) do
   vim.cmd("enew!")
