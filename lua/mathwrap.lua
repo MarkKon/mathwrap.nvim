@@ -50,12 +50,7 @@ local function find_next_equation_relation(body, position)
   return relation_start, relation_end, relation
 end
 
-local function format_math_body(lines)
-  local body = normalize_math_body(lines)
-  if body == "" then
-    return #lines == 0 and {} or { "" }
-  end
-
+local function format_equation_clause(body)
   local formatted = {}
   local position = 1
   while position <= #body do
@@ -81,6 +76,54 @@ local function format_math_body(lines)
     end
     table.insert(formatted, relation)
     position = relation_end + 1
+  end
+
+  return formatted
+end
+
+local function find_next_clause_separator(body, position)
+  local separator_start, separator_end, separator
+  for _, token in ipairs({ "\\implies", "\\qquad", "\\quad", "\\iff" }) do
+    local start_index, end_index = body:find(token, position, true)
+    if start_index and (not separator_start or start_index < separator_start) then
+      separator_start = start_index
+      separator_end = end_index
+      separator = token
+    end
+  end
+
+  return separator_start, separator_end, separator
+end
+
+local function append_clause(formatted, clause)
+  clause = vim.trim(clause)
+  if clause == "" then
+    return
+  end
+
+  for _, line in ipairs(format_equation_clause(clause)) do
+    table.insert(formatted, line)
+  end
+end
+
+local function format_math_body(lines)
+  local body = normalize_math_body(lines)
+  if body == "" then
+    return #lines == 0 and {} or { "" }
+  end
+
+  local formatted = {}
+  local position = 1
+  while position <= #body do
+    local separator_start, separator_end, separator = find_next_clause_separator(body, position)
+    if not separator_start then
+      append_clause(formatted, body:sub(position))
+      break
+    end
+
+    append_clause(formatted, body:sub(position, separator_start - 1))
+    table.insert(formatted, separator)
+    position = separator_end + 1
   end
 
   return formatted

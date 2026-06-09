@@ -219,6 +219,30 @@ tests["format relation chains idempotently"] = function()
   })
 end
 
+tests["format logical connectors as standalone clause-level lines"] = function()
+  reset_mathwrap()
+  require("mathwrap").setup({})
+
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, {
+    "$$",
+    "  a=b \\iff c=d  ",
+    "$$",
+  })
+  vim.api.nvim_win_set_cursor(0, { 2, 0 })
+
+  vim.cmd("LatexMathFormat")
+
+  assert_lines({
+    "$$",
+    "a",
+    "= b",
+    "\\iff",
+    "c",
+    "= d",
+    "$$",
+  })
+end
+
 local failures = {}
 for name, test in pairs(tests) do
   vim.cmd("enew!")
