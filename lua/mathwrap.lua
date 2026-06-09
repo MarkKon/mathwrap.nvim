@@ -230,6 +230,8 @@ local function scalable_delimiter_at(text, index, command)
     start = index,
     finish = finish,
     token = text:sub(index, finish),
+    kind = "scalable",
+    expected_closer = "\\right",
   }
 end
 
@@ -456,19 +458,29 @@ raw_closer_at = function(text, index)
 end
 
 unsupported_opener_at = function(text, index)
-  return left_delimiter_at(text, index)
+  return nil
 end
 
 unsupported_closer_at = function(text, index)
-  return right_delimiter_at(text, index)
+  return nil
+end
+
+local function vertical_delimiter_at(text, index)
+  if text:sub(index, index + 1) == "\\|" then
+    return { start = index, finish = index + 1, token = "\\|", kind = "vertical", expected_closer = "\\|" }
+  end
+  if text:sub(index, index) == "|" and not is_escaped_at(text, index) then
+    return { start = index, finish = index, token = "|", kind = "vertical", expected_closer = "|" }
+  end
+  return nil
 end
 
 any_depth_opener_at = function(text, index)
-  return raw_opener_at(text, index) or escaped_opener_at(text, index) or unsupported_opener_at(text, index)
+  return raw_opener_at(text, index) or escaped_opener_at(text, index) or left_delimiter_at(text, index) or vertical_delimiter_at(text, index)
 end
 
 any_depth_closer_at = function(text, index)
-  return raw_closer_at(text, index) or escaped_closer_at(text, index) or unsupported_closer_at(text, index)
+  return raw_closer_at(text, index) or escaped_closer_at(text, index) or right_delimiter_at(text, index) or vertical_delimiter_at(text, index)
 end
 
 advance_delimiter_depth = function(text, index, stack)
@@ -479,6 +491,9 @@ advance_delimiter_depth = function(text, index, stack)
 
   local unsupported_opener = unsupported_opener_at(text, index)
   local unsupported_closer = unsupported_closer_at(text, index)
+  local scalable_opener = left_delimiter_at(text, index)
+  local scalable_closer = right_delimiter_at(text, index)
+  local vertical = vertical_delimiter_at(text, index)
   local opener = raw_opener_at(text, index) or escaped_opener_at(text, index)
   local closer = raw_closer_at(text, index) or escaped_closer_at(text, index)
   local inside_unsupported = #stack > 0 and stack[#stack].unsupported
@@ -493,6 +508,24 @@ advance_delimiter_depth = function(text, index, stack)
   end
   if inside_unsupported then
     return opener ~= nil or closer ~= nil, index + 1
+  end
+  if scalable_opener then
+    table.insert(stack, { kind = "scalable", unsupported = false })
+    return true, scalable_opener.finish + 1
+  end
+  if scalable_closer then
+    if #stack > 0 and stack[#stack].kind == "scalable" then
+      table.remove(stack)
+    end
+    return true, scalable_closer.finish + 1
+  end
+  if vertical then
+    if #stack > 0 and stack[#stack].kind == "vertical" and stack[#stack].token == vertical.token then
+      table.remove(stack)
+    else
+      table.insert(stack, { kind = "vertical", token = vertical.token, unsupported = false })
+    end
+    return true, vertical.finish + 1
   end
   if opener then
     table.insert(stack, { closer = opener.expected_closer, kind = opener.kind, unsupported = false })
@@ -572,12 +605,13 @@ local function find_matching_closer(text, opener_token)
     return nil
   end
 
-  local stack = { { closer = expected_closer, kind = opener_token.kind, unsupported = false } }
+  local stack = { { closer = expected_closer, kind = opener_token.kind, token = opener_token.token, unsupported = false } }
   local index = opener_token.finish + 1
   while index <= #text do
     local interval_atom = interval_atom_at(text, index)
-    local nested_opener = raw_opener_at(text, index) or escaped_opener_at(text, index)
-    local closer_token = raw_closer_at(text, index) or escaped_closer_at(text, index)
+    local nested_opener = raw_opener_at(text, index) or escaped_opener_at(text, index) or left_delimiter_at(text, index)
+    local closer_token = raw_closer_at(text, index) or escaped_closer_at(text, index) or right_delimiter_at(text, index)
+    local vertical = vertical_delimiter_at(text, index)
     local unsupported_opener = unsupported_opener_at(text, index)
     local unsupported_closer = unsupported_closer_at(text, index)
 
@@ -589,11 +623,27 @@ local function find_matching_closer(text, opener_token)
     elseif unsupported_closer and stack[#stack].unsupported then
       table.remove(stack)
       index = unsupported_closer.finish + 1
+    elseif vertical and not stack[#stack].unsupported then
+      if stack[#stack].kind == "vertical" and stack[#stack].token == vertical.token then
+        table.remove(stack)
+        if #stack == 0 then
+          return vertical
+        end
+      else
+        table.insert(stack, { kind = "vertical", token = vertical.token, unsupported = false })
+      end
+      index = vertical.finish + 1
     elseif nested_opener and not stack[#stack].unsupported then
       table.insert(stack, { closer = nested_opener.expected_closer, kind = nested_opener.kind, unsupported = false })
       index = nested_opener.finish + 1
     elseif closer_token and not stack[#stack].unsupported then
-      if closer_token.kind ~= stack[#stack].kind then
+      if stack[#stack].kind == "scalable" and closer_token.kind == "scalable" then
+        table.remove(stack)
+        if #stack == 0 then
+          return closer_token
+        end
+        index = closer_token.finish + 1
+      elseif closer_token.kind ~= stack[#stack].kind then
         index = closer_token.finish + 1
       elseif closer_token.closer ~= stack[#stack].closer then
         return nil
@@ -719,7 +769,7 @@ local function find_expandable_group(line)
     if advanced then
       opener_index = next_index
     elseif #stack == 0 then
-      opener_token = raw_opener_at(line, opener_index) or escaped_opener_at(line, opener_index)
+      opener_token = raw_opener_at(line, opener_index) or escaped_opener_at(line, opener_index) or left_delimiter_at(line, opener_index) or vertical_delimiter_at(line, opener_index)
       if not opener_token then
         opener_index = opener_index + 1
       end

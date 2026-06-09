@@ -608,6 +608,136 @@ tests["expand visible brace delimiter groups while preserving escaped tokens"] =
   })
 end
 
+tests["expand vertical delimiter pairs without treating bars as clause separators"] = function()
+  reset_mathwrap()
+  require("mathwrap").setup({})
+
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, {
+    "$$",
+    "  raw = |alpha_one + alpha_two + alpha_three + alpha_four + alpha_five|  ",
+    "  escaped = \\|beta_one + beta_two + beta_three + beta_four + beta_five\\|  ",
+    "  condition = \\{x\\in A | x\\mid y\\}  ",
+    "$$",
+  })
+  vim.api.nvim_win_set_cursor(0, { 2, 0 })
+
+  vim.cmd("LatexMathFormat")
+
+  assert_lines({
+    "$$",
+    "raw",
+    "= |",
+    "  alpha_one",
+    "  + alpha_two",
+    "  + alpha_three",
+    "  + alpha_four",
+    "  + alpha_five",
+    "|",
+    "escaped",
+    "= \\|",
+    "  beta_one",
+    "  + beta_two",
+    "  + beta_three",
+    "  + beta_four",
+    "  + beta_five",
+    "\\|",
+    "condition",
+    "= \\{x\\in A | x\\mid y\\}",
+    "$$",
+  })
+end
+
+tests["expand scalable delimiter pairs while preserving attached delimiters"] = function()
+  reset_mathwrap()
+  require("mathwrap").setup({})
+
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, {
+    "$$",
+    "  plain = \\left(beta_one + beta_two + beta_three + beta_four + beta_five\\right)  ",
+    "  mixed = \\left[gamma_one + gamma_two + gamma_three + gamma_four + gamma_five\\right)  ",
+    "  escaped = \\left.delta_one + delta_two + delta_three + delta_four + delta_five\\right\\}  ",
+    "$$",
+  })
+  vim.api.nvim_win_set_cursor(0, { 2, 0 })
+
+  vim.cmd("LatexMathFormat")
+
+  assert_lines({
+    "$$",
+    "plain",
+    "= \\left(",
+    "  beta_one",
+    "  + beta_two",
+    "  + beta_three",
+    "  + beta_four",
+    "  + beta_five",
+    "\\right)",
+    "mixed",
+    "= \\left[",
+    "  gamma_one",
+    "  + gamma_two",
+    "  + gamma_three",
+    "  + gamma_four",
+    "  + gamma_five",
+    "\\right)",
+    "escaped",
+    "= \\left.",
+    "  delta_one",
+    "  + delta_two",
+    "  + delta_three",
+    "  + delta_four",
+    "  + delta_five",
+    "\\right\\}",
+    "$$",
+  })
+end
+
+tests["format visible vertical and scalable delimiter expansions idempotently"] = function()
+  reset_mathwrap()
+  require("mathwrap").setup({})
+
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, {
+    "$$",
+    "  all = \\{alpha_one + alpha_two + alpha_three + alpha_four + alpha_five\\} + |beta_one + beta_two + beta_three + beta_four + beta_five| + \\left(gamma_one + gamma_two + gamma_three + gamma_four + gamma_five\\right]  ",
+    "$$",
+  })
+  vim.api.nvim_win_set_cursor(0, { 2, 0 })
+
+  vim.cmd("LatexMathFormat")
+  local once = vim.api.nvim_buf_get_lines(0, 0, -1, false)
+
+  vim.cmd("LatexMathFormat")
+  local twice = vim.api.nvim_buf_get_lines(0, 0, -1, false)
+
+  assert(vim.deep_equal(twice, once), ("expected idempotent output, got %s then %s"):format(vim.inspect(once), vim.inspect(twice)))
+  assert_lines({
+    "$$",
+    "all",
+    "= \\{",
+    "  alpha_one",
+    "  + alpha_two",
+    "  + alpha_three",
+    "  + alpha_four",
+    "  + alpha_five",
+    "\\}",
+    "+ |",
+    "  beta_one",
+    "  + beta_two",
+    "  + beta_three",
+    "  + beta_four",
+    "  + beta_five",
+    "|",
+    "+ \\left(",
+    "  gamma_one",
+    "  + gamma_two",
+    "  + gamma_three",
+    "  + gamma_four",
+    "  + gamma_five",
+    "\\right]",
+    "$$",
+  })
+end
+
 tests["expand bracketed additive chains without splitting unary signs"] = function()
   reset_mathwrap()
   require("mathwrap").setup({})
@@ -934,7 +1064,7 @@ tests["do not close raw groups on closer-like characters inside unsupported span
   })
 end
 
-tests["expand visible delimiter spans while preserving unsupported scalable spans"] = function()
+tests["expand visible and scalable delimiter spans recursively"] = function()
   reset_mathwrap()
   require("mathwrap").setup({})
 
@@ -961,7 +1091,14 @@ tests["expand visible delimiter spans while preserving unsupported scalable span
     "  + alpha_five",
     ")",
     "\\} scalable",
-    "= \\left.inner(alpha_one + alpha_two + alpha_three + alpha_four + alpha_five)\\right. outer",
+    "= \\left.inner(",
+    "  alpha_one",
+    "  + alpha_two",
+    "  + alpha_three",
+    "  + alpha_four",
+    "  + alpha_five",
+    ")",
+    "\\right. outer",
     "= wrap(",
     "  \\{inner(",
     "    alpha_one",
@@ -978,7 +1115,14 @@ tests["expand visible delimiter spans while preserving unsupported scalable span
     ")",
     "outer_scalable",
     "= wrap(",
-    "  \\left.inner(alpha_one + alpha_two + alpha_three + alpha_four + alpha_five)\\right.",
+    "  \\left.inner(",
+    "    alpha_one",
+    "    + alpha_two",
+    "    + alpha_three",
+    "    + alpha_four",
+    "    + alpha_five",
+    "  )",
+    "  \\right.",
     "  + gamma",
     "  + delta",
     "  + epsilon",
