@@ -98,6 +98,30 @@ tests["format targets block when cursor is on either display math delimiter"] = 
   })
 end
 
+tests["format recognizes only standalone display math delimiters and preserves delimiter spelling"] = function()
+  reset_mathwrap()
+  require("mathwrap").setup({})
+
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, {
+    "$$ \\tag{not-a-delimiter}",
+    "  $$  ",
+    "  a + b  ",
+    "\t$$",
+    "$$ decorated",
+  })
+  vim.api.nvim_win_set_cursor(0, { 3, 0 })
+
+  vim.cmd("LatexMathFormat")
+
+  assert_lines({
+    "$$ \\tag{not-a-delimiter}",
+    "  $$  ",
+    "a + b",
+    "\t$$",
+    "$$ decorated",
+  })
+end
+
 local failures = {}
 for name, test in pairs(tests) do
   vim.cmd("enew!")
