@@ -167,6 +167,29 @@ tests["format definition chains with leading operator lines"] = function()
   })
 end
 
+tests["format inequality chains with leading operator lines"] = function()
+  reset_mathwrap()
+  require("mathwrap").setup({})
+
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, {
+    "$$",
+    "  x\\leq  y",
+    "    \\geq z  ",
+    "$$",
+  })
+  vim.api.nvim_win_set_cursor(0, { 2, 0 })
+
+  vim.cmd("LatexMathFormat")
+
+  assert_lines({
+    "$$",
+    "x",
+    "\\leq y",
+    "\\geq z",
+    "$$",
+  })
+end
+
 local failures = {}
 for name, test in pairs(tests) do
   vim.cmd("enew!")
