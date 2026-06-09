@@ -94,6 +94,31 @@ local function raw_closer_at(text, index)
   }
 end
 
+local function has_operand_before(text, operator_index, segment_start)
+  local left = vim.trim(text:sub(segment_start, operator_index - 1))
+  if left == "" then
+    return false
+  end
+
+  local last = left:sub(#left, #left)
+  return last ~= "+" and last ~= "-"
+end
+
+local function has_operand_after(text, operator_index)
+  local right = vim.trim(text:sub(operator_index + 1))
+  if right == "" then
+    return false
+  end
+
+  local first = right:sub(1, 1)
+  if first == "+" or first == "-" then
+    local after_sign = vim.trim(right:sub(2))
+    return after_sign ~= ""
+  end
+
+  return true
+end
+
 local function find_matching_raw_closer(text, opener_token)
   local opener = opener_token.opener
   local expected_closer = raw_closers[opener]
@@ -133,10 +158,8 @@ local function split_top_level_additive(text)
     elseif raw_closer_at(text, index) then
       depth = depth - 1
     elseif depth == 0 and (char == "+" or char == "-") then
-      local left = vim.trim(text:sub(segment_start, index - 1))
-      local right = vim.trim(text:sub(index + 1))
-      if left ~= "" and right ~= "" then
-        table.insert(segments, left)
+      if has_operand_before(text, index, segment_start) and has_operand_after(text, index) then
+        table.insert(segments, vim.trim(text:sub(segment_start, index - 1)))
         segment_start = index
       end
     end

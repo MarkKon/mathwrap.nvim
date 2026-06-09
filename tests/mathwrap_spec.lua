@@ -455,6 +455,49 @@ tests["do not expand visible or scalable delimiter groups in raw delimiter slice
   })
 end
 
+tests["expand bracketed additive chains without splitting unary signs"] = function()
+  reset_mathwrap()
+  require("mathwrap").setup({})
+
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, {
+    "$$",
+    "  first = (alpha_one + -beta_two + gamma_three + delta_four + epsilon_five)  ",
+    "  second = (alpha_one - -beta_two + gamma_three + delta_four + epsilon_five)  ",
+    "  third = (-alpha_one + beta_two + gamma_three + delta_four + epsilon_five)  ",
+    "$$",
+  })
+  vim.api.nvim_win_set_cursor(0, { 2, 0 })
+
+  vim.cmd("LatexMathFormat")
+
+  assert_lines({
+    "$$",
+    "first",
+    "= (",
+    "  alpha_one",
+    "  + -beta_two",
+    "  + gamma_three",
+    "  + delta_four",
+    "  + epsilon_five",
+    ") second",
+    "= (",
+    "  alpha_one",
+    "  - -beta_two",
+    "  + gamma_three",
+    "  + delta_four",
+    "  + epsilon_five",
+    ") third",
+    "= (",
+    "  -alpha_one",
+    "  + beta_two",
+    "  + gamma_three",
+    "  + delta_four",
+    "  + epsilon_five",
+    ")",
+    "$$",
+  })
+end
+
 local failures = {}
 for name, test in pairs(tests) do
   vim.cmd("enew!")
