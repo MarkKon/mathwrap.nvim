@@ -32,6 +32,22 @@ _Avoid_: delimiter rewrite, semantic delimiter conversion
 A preferred maximum source line length that guides safe split choices without forcing arbitrary breaks.
 _Avoid_: hard line width, token wrapping
 
+**Math Structure**:
+A source-level mathematical unit whose layout can be considered independently during **Source Layout Formatting**.
+_Avoid_: AST node, parser node, syntax tree node
+
+**Math Command Application**:
+A LaTeX math command together with the source arguments it consumes when those arguments affect source layout.
+_Avoid_: text command, bare command token
+
+**Command Argument**:
+A source argument consumed by a **Math Command Application**, whether written as a braced group or as an unbraced atom.
+_Avoid_: brace-only argument, arbitrary suffix
+
+**Delimiter Group**:
+A grouped math expression whose delimiter tokens are part of the rendered mathematical notation.
+_Avoid_: command argument braces, syntax-only braces
+
 **Relation Split**:
 A source layout break at a configured LaTeX relation operator.
 _Avoid_: equality-only split
@@ -63,6 +79,10 @@ _Avoid_: hard-coded relation style
 **Bracket Expansion**:
 A source layout break that expands a grouped subexpression across multiple lines.
 _Avoid_: optional later feature, semantic grouping rewrite
+
+**Layout Choice**:
+One candidate source layout for a math structure, such as inline, expanded at the current structure, or expanded through selected child structures.
+_Avoid_: arbitrary wrap option, rendering mode
 
 **Internal Split Point**:
 A configured source layout break candidate inside a grouped subexpression, such as a top-level additive operator, separator, or relation operator.
@@ -131,12 +151,26 @@ _Avoid_: latex-math-source module
 - **Source Layout Formatting** obeys **Delimiter Token Preservation**.
 - **Source Layout Formatting** must be **Idempotent Formatting**.
 - **Source Layout Formatting** normalizes existing line breaks and repeated spacing before applying configured split rules.
+- A **Math Body** is interpreted as nested **Math Structures** before choosing source layout.
+- A **Math Command Application** is a **Math Structure** when its arguments can be laid out recursively.
+- A **Command Argument** may be braced or unbraced, but unbraced arguments are recognized conservatively as single obvious atoms.
+- Optional **Command Arguments** are recognized only for known or configured **Math Command Applications** that declare them.
+- Square brackets around an optional **Command Argument** are argument syntax, not a **Delimiter Group**.
+- A **Command Argument** may mix braced and unbraced forms within one **Math Command Application**, such as `\frac a{b+c}`.
+- A braced **Command Argument** is not a **Delimiter Group** just because it uses `{...}` source syntax.
+- **Source Layout Formatting** preserves **Command Argument** spelling and does not add braces around originally unbraced arguments.
 - `max_width` is a **Soft Width Target**; **Source Layout Formatting** never invents arbitrary breaks just to satisfy it.
 - **Source Layout Formatting** includes both **Relation Splits** and **Bracket Expansion** as core formatting mechanisms.
+- **Source Layout Formatting** chooses among **Layout Choices** by preferring the fewest expansions that satisfy the **Soft Width Target** when a satisfying choice exists.
+- For a multi-argument **Math Command Application**, expanding only the wide **Command Argument** is preferred when that satisfies the **Soft Width Target**.
 - **Bracket Expansion** applies only when a grouped subexpression exceeds the configured width threshold, contains an **Internal Split Point**, and is not a **Compact Atom**.
 - **Interval Atoms** are conservatively recognized **Compact Atoms**; uncertain comma groups fall back to normal expansion rules.
 - Mixed raw paren/bracket pairs such as `(a,b]` are accepted only as **Interval Atoms**; otherwise unmatched raw delimiter shapes are a **Parse Failure**.
 - Braced command arguments are eligible for **Bracket Expansion** by default; **Text Command Arguments** are excluded from normalization and expansion.
+- Known math commands such as `\sqrt` and `\frac` consume layout-relevant arguments; protected text commands such as `\text` and `\operatorname` consume **Text Command Arguments** instead.
+- Known command argument behavior includes built-in math commands and user-configured math commands.
+- Unknown commands are treated as ordinary command tokens unless configured with argument behavior; adjacent groups may still be formatted as ordinary **Math Structures**.
+- A **Text Command Argument** is an absolute formatting boundary; **Source Layout Formatting** may split around it but must not normalize or expand inside it.
 - **Visible Delimiters** are rendered content but still behave as delimiter pairs for grouping and **Bracket Expansion** when paired.
 - **Vertical Delimiters** are parsed as delimiter pairs when pairable and are not default split separators.
 - A **Scalable Delimiter Pair** behaves as a group for relation splitting and **Bracket Expansion**, preserving each `\left` or `\right` token together with its attached delimiter; the attached opener and closer delimiters may differ.
