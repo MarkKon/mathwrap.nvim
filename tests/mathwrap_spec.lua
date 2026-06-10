@@ -21,6 +21,25 @@ tests["public format entry point formats math body lines without registering com
   assert(vim.deep_equal(formatted, { "a", "= b" }), ("expected formatted lines, got %s"):format(vim.inspect(formatted)))
 end
 
+tests["setup exposes indentation and soft width formatting defaults"] = function()
+  reset_mathwrap()
+  local mathwrap = require("mathwrap")
+  mathwrap.setup({ indent = "    ", max_width = 20 })
+
+  local formatted = assert(mathwrap.format({
+    "  F = alpha(beta_one + beta_two + beta_three)  ",
+  }))
+
+  assert(vim.deep_equal(formatted, {
+    "F",
+    "= alpha(",
+    "    beta_one",
+    "    + beta_two",
+    "    + beta_three",
+    ")",
+  }), ("expected configured indentation and width, got %s"):format(vim.inspect(formatted)))
+end
+
 tests["format outside enclosing display math block leaves buffer unchanged and reports error"] = function()
   reset_mathwrap()
   require("mathwrap").setup({})

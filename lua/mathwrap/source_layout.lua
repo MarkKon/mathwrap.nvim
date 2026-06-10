@@ -3,6 +3,7 @@ local scanner = require("mathwrap.scanner")
 local M = {}
 
 local format_options = {
+  indent = "  ",
   max_width = 60,
 }
 
@@ -812,7 +813,7 @@ local function append_expanded_bracketed_line(output, line, indent)
   local suffix = vim.trim(line:sub(closer_token.finish + 1))
   table.insert(output, indent .. opener_prefix)
   for _, segment in ipairs(segments) do
-    expand_bracketed_segment(output, segment, indent .. "  ")
+    expand_bracketed_segment(output, segment, indent .. format_options.indent)
   end
   table.insert(output, indent .. closer_token.token)
   if suffix ~= "" then
@@ -966,6 +967,7 @@ end
 function M.format(lines, opts)
   opts = opts or {}
   format_options = {
+    indent = opts.indent or "  ",
     max_width = opts.max_width or 60,
   }
 
