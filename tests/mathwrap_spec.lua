@@ -270,6 +270,35 @@ tests["preserve alignment markers as relation operator prefixes without creating
   })
 end
 
+tests["format rows with alignment markers idempotently"] = function()
+  reset_mathwrap()
+  require("mathwrap").setup({})
+
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, {
+    "$$",
+    "  total & = first + second \\\\ bound & \\geq lower  ",
+    "$$",
+  })
+  vim.api.nvim_win_set_cursor(0, { 2, 0 })
+
+  vim.cmd("LatexMathFormat")
+  local once = vim.api.nvim_buf_get_lines(0, 0, -1, false)
+
+  vim.cmd("LatexMathFormat")
+  local twice = vim.api.nvim_buf_get_lines(0, 0, -1, false)
+
+  assert(vim.deep_equal(twice, once), ("expected idempotent output, got %s then %s"):format(vim.inspect(once), vim.inspect(twice)))
+  assert_lines({
+    "$$",
+    "total",
+    "&= first + second",
+    "\\\\",
+    "bound",
+    "&\\geq lower",
+    "$$",
+  })
+end
+
 tests["format logical connectors as standalone clause-level lines"] = function()
   reset_mathwrap()
   require("mathwrap").setup({})
