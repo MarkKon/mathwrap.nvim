@@ -865,12 +865,17 @@ local function format_equation_clause(body)
     end
 
     local segment = vim.trim(body:sub(position, relation_start - 1))
+    local relation_prefix = ""
+    if segment:match("&%s*$") then
+      relation_prefix = "&"
+      segment = vim.trim(segment:gsub("%s*&%s*$", ""))
+    end
     if #formatted == 0 then
       table.insert(formatted, segment)
     elseif segment ~= "" then
       formatted[#formatted] = formatted[#formatted] .. " " .. segment
     end
-    table.insert(formatted, relation)
+    table.insert(formatted, relation_prefix .. relation)
     position = relation_end + 1
   end
 

@@ -243,6 +243,33 @@ tests["preserve row separators and format each row independently"] = function()
   })
 end
 
+tests["preserve alignment markers as relation operator prefixes without creating new markers"] = function()
+  reset_mathwrap()
+  require("mathwrap").setup({})
+
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, {
+    "$$",
+    "  a & = b \\\\ c&\\leq d \\\\ e = f  ",
+    "$$",
+  })
+  vim.api.nvim_win_set_cursor(0, { 2, 0 })
+
+  vim.cmd("LatexMathFormat")
+
+  assert_lines({
+    "$$",
+    "a",
+    "&= b",
+    "\\\\",
+    "c",
+    "&\\leq d",
+    "\\\\",
+    "e",
+    "= f",
+    "$$",
+  })
+end
+
 tests["format logical connectors as standalone clause-level lines"] = function()
   reset_mathwrap()
   require("mathwrap").setup({})
