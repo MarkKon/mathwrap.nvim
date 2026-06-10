@@ -33,6 +33,23 @@ tests["public format entry point formats math body lines without registering com
   assert(vim.deep_equal(formatted, { "a", "= b" }), ("expected formatted lines, got %s"):format(vim.inspect(formatted)))
 end
 
+tests["setup command registration can disable repeatedly and re-enable"] = function()
+  reset_mathwrap()
+  local mathwrap = require("mathwrap")
+
+  mathwrap.setup({})
+  assert(vim.fn.exists(":LatexMathFormat") == 2, "expected default setup to register command")
+
+  mathwrap.setup({ command = false })
+  assert(vim.fn.exists(":LatexMathFormat") == 0, "expected command=false to remove command")
+
+  mathwrap.setup({ command = false })
+  assert(vim.fn.exists(":LatexMathFormat") == 0, "expected repeated command=false to keep command absent")
+
+  mathwrap.setup({})
+  assert(vim.fn.exists(":LatexMathFormat") == 2, "expected setup to re-enable command")
+end
+
 tests["setup exposes indentation and soft width formatting defaults"] = function()
   reset_mathwrap()
   local mathwrap = require("mathwrap")
@@ -75,6 +92,45 @@ tests["setup exposes split classes and protected text commands"] = function()
     "c",
     "= \\customtext{keep   spaces = inline}",
   }), ("expected configured split classes and protected commands, got %s"):format(vim.inspect(formatted)))
+end
+
+tests["custom split class lists replace defaults"] = function()
+  reset_mathwrap()
+  local mathwrap = require("mathwrap")
+  mathwrap.setup({
+    split_classes = {
+      equation_relations = { "=" },
+      logical_connectors = {},
+    },
+  })
+
+  local formatted = assert(mathwrap.format({
+    "  a\\leq b = c \\iff d = e  ",
+  }))
+
+  assert(vim.deep_equal(formatted, {
+    "a\\leq b",
+    "= c \\iff d",
+    "= e",
+  }), ("expected provided split lists to replace defaults, got %s"):format(vim.inspect(formatted)))
+end
+
+tests["empty split class list disables that class"] = function()
+  reset_mathwrap()
+  local mathwrap = require("mathwrap")
+  mathwrap.setup({
+    split_classes = {
+      equation_relations = {},
+    },
+  })
+
+  local formatted = assert(mathwrap.format({
+    "  a=b\\leq c:=d\\geq e  ",
+  }))
+
+  assert(vim.deep_equal(formatted, {
+    "a=b\\leq c:=d\\geq e",
+  }), ("expected empty equation relation list to disable relation splits, got %s"):format(vim.inspect(formatted)))
 end
 
 tests["setup exposes relation policy bracket expansion and compact atom width"] = function()
@@ -125,6 +181,18 @@ tests["context regression snapshots format idempotently"] = function()
       name = "compact membership relations stay inline",
       input = { "  z\\sim\\pi x\\in A f:X\\to Y  " },
       expected = { "z\\sim\\pi x\\in A f:X\\to Y" },
+    },
+    {
+      name = "over-width membership relations split with leading operator lines",
+      input = { "  source_object_with_long_name\\to target_object_with_long_name  " },
+      expected = { "source_object_with_long_name", "\\to target_object_with_long_name" },
+      opts = { max_width = 40 },
+    },
+    {
+      name = "custom membership relations replace defaults",
+      input = { "  alpha\\mapsto beta\\to gamma  " },
+      expected = { "alpha", "\\mapsto beta\\to gamma" },
+      opts = { max_width = 10, split_classes = { membership_relations = { "\\mapsto" } } },
     },
     {
       name = "bracket expansion uses leading operators and aligned closers",

@@ -22,6 +22,14 @@ local defaults = {
   },
 }
 
+local function normalize_split_classes(opts)
+  local split_classes = vim.deepcopy(defaults.split_classes)
+  for name, tokens in pairs(opts.split_classes or {}) do
+    split_classes[name] = tokens
+  end
+  return split_classes
+end
+
 function M.normalize(opts)
   opts = opts or {}
   local max_width = opts.max_width or opts.source_layout and opts.source_layout.max_width or defaults.max_width
@@ -32,6 +40,7 @@ function M.normalize(opts)
     bracket_expansion = defaults.bracket_expansion
   end
   local compact_atom_width = opts.compact_atom_width or defaults.compact_atom_width
+  local split_classes = normalize_split_classes(opts)
 
   return {
     command = opts.command ~= false,
@@ -40,7 +49,7 @@ function M.normalize(opts)
     relation_split_policy = relation_split_policy,
     bracket_expansion = bracket_expansion,
     compact_atom_width = compact_atom_width,
-    split_classes = vim.tbl_deep_extend("force", defaults.split_classes, opts.split_classes or {}),
+    split_classes = split_classes,
     protected_text_commands = opts.protected_text_commands or defaults.protected_text_commands,
     source_layout = {
       indent = indent,
@@ -48,7 +57,7 @@ function M.normalize(opts)
       relation_split_policy = relation_split_policy,
       bracket_expansion = bracket_expansion,
       compact_atom_width = compact_atom_width,
-      split_classes = vim.tbl_deep_extend("force", defaults.split_classes, opts.split_classes or {}),
+      split_classes = split_classes,
       protected_text_commands = opts.protected_text_commands or defaults.protected_text_commands,
     },
   }

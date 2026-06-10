@@ -864,6 +864,61 @@ local function find_next_equation_relation(body, position)
   return relation_start, relation_end, relation
 end
 
+local function find_next_membership_relation(body, position)
+  local relation_start, relation_end, relation
+  for _, token in ipairs(format_options.split_classes.membership_relations or {}) do
+    local start_index, end_index = find_top_level_token(body, token, position)
+    if start_index and (not relation_start or start_index < relation_start) then
+      relation_start = start_index
+      relation_end = end_index
+      relation = token
+    end
+  end
+
+  return relation_start, relation_end, relation
+end
+
+local function split_width_pressure_membership_relations(lines)
+  local split = {}
+
+  for _, line in ipairs(lines) do
+    if #line <= format_options.max_width then
+      table.insert(split, line)
+    else
+      local position = 1
+      local line_split = false
+      while position <= #line do
+        local relation_start, relation_end, relation = find_next_membership_relation(line, position)
+        if not relation_start then
+          local segment = vim.trim(line:sub(position))
+          if segment ~= "" then
+            if not line_split then
+              table.insert(split, segment)
+            else
+              split[#split] = split[#split] .. " " .. segment
+            end
+          end
+          break
+        end
+
+        local segment = vim.trim(line:sub(position, relation_start - 1))
+        if not line_split then
+          if segment ~= "" then
+            table.insert(split, segment)
+          end
+          line_split = true
+        elseif segment ~= "" then
+          split[#split] = split[#split] .. " " .. segment
+        end
+        table.insert(split, relation)
+        position = relation_end + 1
+      end
+    end
+  end
+
+  return split
+end
+
 local function format_equation_clause(body)
   if format_options.relation_split_policy == "width" and #body <= format_options.max_width then
     return expand_bracketed_expressions({ body })
@@ -901,7 +956,7 @@ local function format_equation_clause(body)
     position = relation_end + 1
   end
 
-  return expand_bracketed_expressions(formatted)
+  return expand_bracketed_expressions(split_width_pressure_membership_relations(formatted))
 end
 
 local function find_next_clause_separator(body, position)

@@ -84,7 +84,7 @@ The public API is intentionally small: `setup(opts)` and `format(lines, opts)`.
 
 ## Default Behavior
 
-By default, Mathwrap registers `:LatexMathFormat`, uses two-space indentation, and treats `max_width = 60` as a soft target. Relation operators split to leading operator lines, logical connectors and configured spacing commands become clause-level separator lines, and compact membership relations such as `x\in A` stay inline.
+By default, Mathwrap registers `:LatexMathFormat`, uses two-space indentation, and treats `max_width = 60` as a soft target. Relation operators split to leading operator lines, logical connectors and configured spacing commands become clause-level separator lines, and membership relations such as `x\in A` stay inline until they exceed the soft width target.
 
 Bracket expansion is enabled for long grouped expressions with internal split points. Short interval-like atoms stay compact. Protected text command arguments keep their internal whitespace and are excluded from normalization.
 
