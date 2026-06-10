@@ -65,6 +65,38 @@ tests["setup exposes split classes and protected text commands"] = function()
   }), ("expected configured split classes and protected commands, got %s"):format(vim.inspect(formatted)))
 end
 
+tests["setup exposes relation policy bracket expansion and compact atom width"] = function()
+  reset_mathwrap()
+  local mathwrap = require("mathwrap")
+  mathwrap.setup({
+    max_width = 80,
+    relation_split_policy = "width",
+    bracket_expansion = false,
+    compact_atom_width = 3,
+  })
+
+  local formatted = assert(mathwrap.format({
+    "  a=b  ",
+    "  value = [0,10] + alpha_one + alpha_two + alpha_three + alpha_four  ",
+  }))
+
+  assert(vim.deep_equal(formatted, {
+    "a=b value = [0,10] + alpha_one + alpha_two + alpha_three + alpha_four",
+  }), ("expected configured policy and disabled expansion, got %s"):format(vim.inspect(formatted)))
+end
+
+tests["width relation split policy only splits relations under width pressure"] = function()
+  reset_mathwrap()
+  local mathwrap = require("mathwrap")
+  mathwrap.setup({ max_width = 9, relation_split_policy = "width" })
+
+  local compact = assert(mathwrap.format({ "  a=b  " }))
+  local wide = assert(mathwrap.format({ "  alpha=beta  " }))
+
+  assert(vim.deep_equal(compact, { "a=b" }), ("expected compact relation chain to stay inline, got %s"):format(vim.inspect(compact)))
+  assert(vim.deep_equal(wide, { "alpha", "= beta" }), ("expected wide relation chain to split, got %s"):format(vim.inspect(wide)))
+end
+
 tests["format outside enclosing display math block leaves buffer unchanged and reports error"] = function()
   reset_mathwrap()
   require("mathwrap").setup({})

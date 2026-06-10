@@ -5,6 +5,9 @@ local M = {}
 local format_options = {
   indent = "  ",
   max_width = 60,
+  relation_split_policy = "always",
+  bracket_expansion = true,
+  compact_atom_width = 28,
   split_classes = {
     equation_relations = { ":=", "\\leq", "\\geq", "=" },
     logical_connectors = { "\\implies", "\\iff" },
@@ -271,7 +274,7 @@ end
 
 local function is_interval_endpoint(text)
   text = vim.trim(text)
-  if text == "" or #text > 28 then
+  if text == "" or #text > format_options.compact_atom_width then
     return false
   end
   if text:find("[,;=_]") then
@@ -833,6 +836,10 @@ expand_bracketed_segment = function(output, segment, indent)
 end
 
 local function expand_bracketed_expressions(lines)
+  if not format_options.bracket_expansion then
+    return lines
+  end
+
   local expanded = {}
 
   for _, line in ipairs(lines) do
@@ -858,6 +865,10 @@ local function find_next_equation_relation(body, position)
 end
 
 local function format_equation_clause(body)
+  if format_options.relation_split_policy == "width" and #body <= format_options.max_width then
+    return expand_bracketed_expressions({ body })
+  end
+
   local formatted = {}
   local position = 1
   while position <= #body do
@@ -976,6 +987,9 @@ function M.format(lines, opts)
   format_options = {
     indent = opts.indent or "  ",
     max_width = opts.max_width or 60,
+    relation_split_policy = opts.relation_split_policy or "always",
+    bracket_expansion = opts.bracket_expansion ~= false,
+    compact_atom_width = opts.compact_atom_width or 28,
     split_classes = opts.split_classes or format_options.split_classes,
     protected_text_commands = opts.protected_text_commands or format_options.protected_text_commands,
   }
