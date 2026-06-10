@@ -114,6 +114,16 @@ local function normalize_math_body(lines)
   return vim.trim(protected_body:gsub("%s+", " ")), protected
 end
 
+local function has_line_bound_comment(text)
+  for index = 1, #text do
+    if text:sub(index, index) == "%" and not is_escaped_at(text, index) then
+      return true
+    end
+  end
+
+  return false
+end
+
 local raw_closers = {
   ["("] = ")",
   ["["] = "]",
@@ -960,6 +970,9 @@ function M.format(lines, opts)
   }
 
   local body, protected = normalize_math_body(lines)
+  if has_line_bound_comment(body) then
+    return nil, "line-bound comment outside protected text command"
+  end
   if body == "" then
     return #lines == 0 and {} or { "" }
   end

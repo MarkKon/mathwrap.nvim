@@ -493,6 +493,34 @@ tests["preserve protected text command arguments without normalization or expans
   })
 end
 
+tests["unsafe comments outside protected text command arguments fail closed without changing buffer"] = function()
+  reset_mathwrap()
+  require("mathwrap").setup({})
+
+  local notifications = {}
+  local original_notify = vim.notify
+  vim.notify = function(message, level)
+    table.insert(notifications, { message = message, level = level })
+  end
+
+  local original = {
+    "$$",
+    "  a = b % line-bound comment",
+    "  c = d",
+    "$$",
+  }
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, original)
+  vim.api.nvim_win_set_cursor(0, { 2, 0 })
+
+  vim.cmd("LatexMathFormat")
+
+  vim.notify = original_notify
+  assert_lines(original)
+  assert(#notifications == 1, "expected one error notification")
+  assert(notifications[1].level == vim.log.levels.ERROR, "expected error notification level")
+  assert(notifications[1].message:match("line%-bound comment"), "expected clear unsafe comment error")
+end
+
 tests["preserve literal text that looks like a protected text placeholder"] = function()
   reset_mathwrap()
   require("mathwrap").setup({})
