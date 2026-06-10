@@ -16,6 +16,10 @@ local defaults = {
     punctuation_separators = { ",", ";" },
   },
   protected_text_commands = { "\\text", "\\textrm", "\\textit", "\\textbf", "\\mathrm", "\\operatorname" },
+  math_commands = {
+    ["\\frac"] = { required = 2 },
+    ["\\sqrt"] = { optional = 1, required = 1 },
+  },
   source_layout = {
     indent = "  ",
     max_width = 60,
@@ -41,6 +45,10 @@ function M.normalize(opts)
   end
   local compact_atom_width = opts.compact_atom_width or defaults.compact_atom_width
   local split_classes = normalize_split_classes(opts)
+  local math_commands = vim.deepcopy(defaults.math_commands)
+  for command, behavior in pairs(opts.math_commands or {}) do
+    math_commands[command] = behavior
+  end
 
   return {
     command = opts.command ~= false,
@@ -51,6 +59,7 @@ function M.normalize(opts)
     compact_atom_width = compact_atom_width,
     split_classes = split_classes,
     protected_text_commands = opts.protected_text_commands or defaults.protected_text_commands,
+    math_commands = math_commands,
     source_layout = {
       indent = indent,
       max_width = max_width,
@@ -59,6 +68,7 @@ function M.normalize(opts)
       compact_atom_width = compact_atom_width,
       split_classes = split_classes,
       protected_text_commands = opts.protected_text_commands or defaults.protected_text_commands,
+      math_commands = math_commands,
     },
   }
 end

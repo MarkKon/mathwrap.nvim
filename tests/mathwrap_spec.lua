@@ -938,6 +938,123 @@ tests["expand long non-text braced command arguments"] = function()
   })
 end
 
+tests["treat sqrt optional argument as command syntax instead of delimiter group"] = function()
+  reset_mathwrap()
+  require("mathwrap").setup({})
+
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, {
+    "$$",
+    "  value = \\sqrt[index_one + index_two + index_three + index_four + index_five]{x}  ",
+    "$$",
+  })
+  vim.api.nvim_win_set_cursor(0, { 2, 0 })
+
+  vim.cmd("LatexMathFormat")
+
+  assert_lines({
+    "$$",
+    "value",
+    "= \\sqrt[index_one + index_two + index_three + index_four + index_five]{x}",
+    "$$",
+  })
+end
+
+tests["treat spaced sqrt optional argument as command syntax instead of delimiter group"] = function()
+  reset_mathwrap()
+  require("mathwrap").setup({})
+
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, {
+    "$$",
+    "  value = \\sqrt [index_one + index_two + index_three + index_four + index_five]{x}  ",
+    "$$",
+  })
+  vim.api.nvim_win_set_cursor(0, { 2, 0 })
+
+  vim.cmd("LatexMathFormat")
+
+  assert_lines({
+    "$$",
+    "value",
+    "= \\sqrt [index_one + index_two + index_three + index_four + index_five]{x}",
+    "$$",
+  })
+end
+
+tests["recognize mixed braced and unbraced frac arguments as one command application"] = function()
+  reset_mathwrap()
+  require("mathwrap").setup({})
+
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, {
+    "$$",
+    "  result = \\frac a{b=c} = tail  ",
+    "$$",
+  })
+  vim.api.nvim_win_set_cursor(0, { 2, 0 })
+
+  vim.cmd("LatexMathFormat")
+
+  assert_lines({
+    "$$",
+    "result",
+    "= \\frac a{b=c}",
+    "= tail",
+    "$$",
+  })
+end
+
+tests["configured math commands consume declared arguments"] = function()
+  reset_mathwrap()
+  require("mathwrap").setup({
+    math_commands = {
+      ["\\pair"] = { required = 2 },
+    },
+  })
+
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, {
+    "$$",
+    "  result = \\pair{left=inside}{right=inside} = tail  ",
+    "$$",
+  })
+  vim.api.nvim_win_set_cursor(0, { 2, 0 })
+
+  vim.cmd("LatexMathFormat")
+
+  assert_lines({
+    "$$",
+    "result",
+    "= \\pair{left=inside}{right=inside}",
+    "= tail",
+    "$$",
+  })
+end
+
+tests["unknown commands leave adjacent groups as ordinary math structures"] = function()
+  reset_mathwrap()
+  require("mathwrap").setup({})
+
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, {
+    "$$",
+    "  result = \\unknown{alpha_one + alpha_two + alpha_three + alpha_four + alpha_five}  ",
+    "$$",
+  })
+  vim.api.nvim_win_set_cursor(0, { 2, 0 })
+
+  vim.cmd("LatexMathFormat")
+
+  assert_lines({
+    "$$",
+    "result",
+    "= \\unknown{",
+    "  alpha_one",
+    "  + alpha_two",
+    "  + alpha_three",
+    "  + alpha_four",
+    "  + alpha_five",
+    "}",
+    "$$",
+  })
+end
+
 tests["expand nested raw bracketed groups recursively while preserving delimiter spelling"] = function()
   reset_mathwrap()
   require("mathwrap").setup({})

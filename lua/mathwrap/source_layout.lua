@@ -16,6 +16,10 @@ local format_options = {
     punctuation_separators = { ",", ";" },
   },
   protected_text_commands = { "\\text", "\\textrm", "\\textit", "\\textbf", "\\mathrm", "\\operatorname" },
+  math_commands = {
+    ["\\frac"] = { required = 2 },
+    ["\\sqrt"] = { optional = 1, required = 1 },
+  },
 }
 
 local is_escaped_at
@@ -26,6 +30,10 @@ local function configured_protected_text_commands()
     commands[command] = true
   end
   return commands
+end
+
+local function configured_math_commands()
+  return format_options.math_commands or {}
 end
 
 local function find_matching_brace(text, opener_index)
@@ -162,6 +170,148 @@ is_escaped_at = function(text, index)
   end
 
   return backslashes % 2 == 1
+end
+
+local function command_token_at(text, index)
+  if text:sub(index, index) ~= "\\" then
+    return nil
+  end
+
+  local finish = index + 1
+  if text:sub(finish, finish):match("%a") then
+    while finish <= #text and text:sub(finish, finish):match("%a") do
+      finish = finish + 1
+    end
+    finish = finish - 1
+  elseif finish <= #text then
+    finish = index + 1
+  else
+    return nil
+  end
+
+  return { start = index, finish = finish, token = text:sub(index, finish) }
+end
+
+local function skip_spaces(text, index)
+  while index <= #text and text:sub(index, index):match("%s") do
+    index = index + 1
+  end
+  return index
+end
+
+local function find_matching_raw_group(text, opener_index, opener, closer)
+  local depth = 1
+  local index = opener_index + 1
+  while index <= #text do
+    local char = text:sub(index, index)
+    if char == opener and not is_escaped_at(text, index) then
+      depth = depth + 1
+    elseif char == closer and not is_escaped_at(text, index) then
+      depth = depth - 1
+      if depth == 0 then
+        return index
+      end
+    end
+    index = index + 1
+  end
+  return nil
+end
+
+local function command_argument_at(text, index, allow_optional)
+  index = skip_spaces(text, index)
+  local opener = text:sub(index, index)
+
+  if allow_optional and opener == "[" and not is_escaped_at(text, index) then
+    local closer = find_matching_raw_group(text, index, "[", "]")
+    if closer then
+      return { start = index, finish = closer, optional = true, braced = true }
+    end
+    return nil
+  end
+
+  if opener == "{" and not is_escaped_at(text, index) then
+    local closer = find_matching_raw_group(text, index, "{", "}")
+    if closer then
+      return { start = index, finish = closer, optional = false, braced = true }
+    end
+    return nil
+  end
+
+  local command = command_token_at(text, index)
+  if command then
+    return { start = index, finish = command.finish, optional = false, braced = false }
+  end
+
+  if opener ~= "" and not opener:match("%s") and not opener:match("[%[%]{}(),;=+%-]") then
+    return { start = index, finish = index, optional = false, braced = false }
+  end
+
+  return nil
+end
+
+local function math_command_application_at(text, index)
+  local command = command_token_at(text, index)
+  if not command then
+    return nil
+  end
+
+  local behavior = configured_math_commands()[command.token]
+  if not behavior then
+    return nil
+  end
+
+  local args = {}
+  local cursor = command.finish + 1
+  for _ = 1, behavior.optional or 0 do
+    local argument = command_argument_at(text, cursor, true)
+    if argument and argument.optional then
+      table.insert(args, argument)
+      cursor = argument.finish + 1
+    end
+  end
+
+  for _ = 1, behavior.required or 0 do
+    local argument = command_argument_at(text, cursor, false)
+    if not argument then
+      return nil
+    end
+    table.insert(args, argument)
+    cursor = argument.finish + 1
+  end
+
+  return {
+    start = command.start,
+    finish = cursor - 1,
+    token = command.token,
+    args = args,
+  }
+end
+
+local function optional_command_argument_at(text, index)
+  for command in pairs(configured_math_commands()) do
+    local search_finish = index - 1
+    while search_finish >= 1 and text:sub(search_finish, search_finish):match("%s") do
+      search_finish = search_finish - 1
+    end
+
+    local command_start = search_finish - #command + 1
+    if command_start >= 1 and text:sub(command_start, search_finish) == command then
+      local before = command_start - 1
+      local application = math_command_application_at(text, command_start)
+      if
+        application
+        and (before < 1 or text:sub(before, before) ~= "\\")
+        and skip_spaces(text, command_start + #command) == index
+      then
+        for _, argument in ipairs(application.args) do
+          if argument.optional and argument.start == index then
+            return argument
+          end
+        end
+      end
+    end
+  end
+  return nil
 end
 
 local function is_attached_to_left_command(text, index)
@@ -529,6 +679,11 @@ any_depth_closer_at = function(text, index)
 end
 
 advance_delimiter_depth = function(text, index, stack)
+  local command_application = math_command_application_at(text, index)
+  if command_application then
+    return true, command_application.finish + 1
+  end
+
   local interval_atom = interval_atom_at(text, index)
   if interval_atom then
     return true, interval_atom.finish + 1
@@ -589,6 +744,11 @@ advance_delimiter_depth = function(text, index, stack)
 end
 
 local function advance_unsupported_depth(text, index, stack)
+  local optional_argument = optional_command_argument_at(text, index)
+  if optional_argument then
+    return true, optional_argument.finish + 1
+  end
+
   local unsupported_opener = unsupported_opener_at(text, index)
   local unsupported_closer = unsupported_closer_at(text, index)
 
@@ -812,9 +972,14 @@ local function find_expandable_group(line)
     if advanced then
       opener_index = next_index
     elseif #stack == 0 then
-      opener_token = raw_opener_at(line, opener_index) or escaped_opener_at(line, opener_index) or left_delimiter_at(line, opener_index) or vertical_delimiter_at(line, opener_index)
-      if not opener_token then
-        opener_index = opener_index + 1
+      local command_application = math_command_application_at(line, opener_index)
+      if command_application then
+        opener_index = command_application.start + 1
+      else
+        opener_token = raw_opener_at(line, opener_index) or escaped_opener_at(line, opener_index) or left_delimiter_at(line, opener_index) or vertical_delimiter_at(line, opener_index)
+        if not opener_token then
+          opener_index = opener_index + 1
+        end
       end
     else
       opener_index = opener_index + 1
@@ -1123,6 +1288,7 @@ function M.format(lines, opts)
     compact_atom_width = opts.compact_atom_width or 28,
     split_classes = opts.split_classes or format_options.split_classes,
     protected_text_commands = opts.protected_text_commands or format_options.protected_text_commands,
+    math_commands = opts.math_commands or format_options.math_commands,
   }
 
   local body, protected = normalize_math_body(lines)
