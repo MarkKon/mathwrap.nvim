@@ -21,6 +21,37 @@ end
 
 local tests = {}
 
+tests["math structure context recognizes configured command applications"] = function()
+  local config = require("mathwrap.config")
+  local math_structure = require("mathwrap.math_structure")
+  local context = math_structure.new_context(config.normalize({
+    math_commands = {
+      ["\\rootof"] = { optional = 1, required = 1 },
+    },
+  }).source_layout)
+
+  local application = context.math_command_application_at("\\rootof[index = n]{radicand = x} = tail", 1)
+
+  assert(application, "expected configured command application")
+  assert(application.token == "\\rootof", ("expected command token, got %s"):format(vim.inspect(application)))
+  assert(#application.args == 2, ("expected optional and required arguments, got %s"):format(vim.inspect(application.args)))
+  assert(application.args[1].optional == true, "expected first argument to be optional")
+  assert(application.finish == #"\\rootof[index = n]{radicand = x}", ("expected command application to consume both arguments, got %s"):format(application.finish))
+end
+
+tests["math structure context advances compact interval atoms over internal comma"] = function()
+  local config = require("mathwrap.config")
+  local math_structure = require("mathwrap.math_structure")
+  local context = math_structure.new_context(config.normalize({}).source_layout)
+  local stack = {}
+
+  local advanced, next_index = context.advance_delimiter_depth("(-\\infty, 0] + tail", 1, stack)
+
+  assert(advanced, "expected interval atom to advance as one math structure")
+  assert(next_index == #"(-\\infty, 0]" + 1, ("expected next index after interval, got %d"):format(next_index))
+  assert(#stack == 0, ("expected interval atom not to leave delimiter depth, got %s"):format(vim.inspect(stack)))
+end
+
 tests["public format entry point formats math body lines without registering commands"] = function()
   reset_mathwrap()
   local mathwrap = require("mathwrap")
