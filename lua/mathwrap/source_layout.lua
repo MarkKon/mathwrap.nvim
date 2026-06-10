@@ -5,18 +5,25 @@ local M = {}
 local format_options = {
   indent = "  ",
   max_width = 60,
+  split_classes = {
+    equation_relations = { ":=", "\\leq", "\\geq", "=" },
+    logical_connectors = { "\\implies", "\\iff" },
+    clause_separators = { "\\qquad", "\\quad" },
+    additive_operators = { "+", "-" },
+    punctuation_separators = { ",", ";" },
+  },
+  protected_text_commands = { "\\text", "\\textrm", "\\textit", "\\textbf", "\\mathrm", "\\operatorname" },
 }
 
 local is_escaped_at
 
-local protected_text_commands = {
-  ["\\text"] = true,
-  ["\\textrm"] = true,
-  ["\\textit"] = true,
-  ["\\textbf"] = true,
-  ["\\mathrm"] = true,
-  ["\\operatorname"] = true,
-}
+local function configured_protected_text_commands()
+  local commands = {}
+  for _, command in ipairs(format_options.protected_text_commands) do
+    commands[command] = true
+  end
+  return commands
+end
 
 local function find_matching_brace(text, opener_index)
   local depth = 1
@@ -47,7 +54,7 @@ local function protect_text_command_arguments(text)
 
   while index <= #text do
     local matched_command
-    for command in pairs(protected_text_commands) do
+    for command in pairs(configured_protected_text_commands()) do
       if text:sub(index, index + #command - 1) == command then
         local after = index + #command
         local next_char = text:sub(after, after)
@@ -702,7 +709,7 @@ end
 local function split_top_level_additive(text)
   local split_segments = scanner.split_top_level(text, function(candidate, index, segment_start)
     local char = candidate:sub(index, index)
-    return (char == "+" or char == "-")
+    return vim.tbl_contains(format_options.split_classes.additive_operators, char)
       and has_operand_before(candidate, index, segment_start)
       and has_operand_after(candidate, index)
   end, advance_delimiter_depth, { keep_token_with_next = true })
@@ -723,7 +730,7 @@ end
 local function split_top_level_punctuation_items(text)
   local split_segments = scanner.split_top_level(text, function(candidate, index)
     local char = candidate:sub(index, index)
-    return char == "," or char == ";"
+    return vim.tbl_contains(format_options.split_classes.punctuation_separators, char)
   end, advance_delimiter_depth)
 
   if not split_segments or #split_segments < 3 then
@@ -836,21 +843,14 @@ local function expand_bracketed_expressions(lines)
 end
 
 local function find_next_equation_relation(body, position)
-  local leq_start, leq_end = find_top_level_token(body, "\\leq", position)
-  local geq_start, geq_end = find_top_level_token(body, "\\geq", position)
-  local eq_start, eq_end = find_top_level_token(body, "=", position)
-
   local relation_start, relation_end, relation
-  for _, candidate in ipairs({
-    { start = find_top_level_token(body, ":=", position), token = ":=" },
-    { start = leq_start, finish = leq_end, token = "\\leq" },
-    { start = geq_start, finish = geq_end, token = "\\geq" },
-    { start = eq_start, finish = eq_end, token = "=" },
-  }) do
+  for _, token in ipairs(format_options.split_classes.equation_relations) do
+    local start_index, end_index = find_top_level_token(body, token, position)
+    local candidate = { start = start_index, finish = end_index, token = token }
     if candidate.start and (not relation_start or candidate.start < relation_start) then
       relation_start = candidate.start
       relation = candidate.token
-      relation_end = candidate.finish or (candidate.start + #candidate.token - 1)
+      relation_end = candidate.finish
     end
   end
 
@@ -895,7 +895,14 @@ end
 
 local function find_next_clause_separator(body, position)
   local separator_start, separator_end, separator
-  for _, token in ipairs({ "\\implies", "\\qquad", "\\quad", "\\iff" }) do
+  local tokens = {}
+  for _, token in ipairs(format_options.split_classes.logical_connectors) do
+    table.insert(tokens, token)
+  end
+  for _, token in ipairs(format_options.split_classes.clause_separators) do
+    table.insert(tokens, token)
+  end
+  for _, token in ipairs(tokens) do
     local start_index, end_index = find_top_level_token(body, token, position)
     if start_index and (not separator_start or start_index < separator_start) then
       separator_start = start_index
@@ -969,6 +976,8 @@ function M.format(lines, opts)
   format_options = {
     indent = opts.indent or "  ",
     max_width = opts.max_width or 60,
+    split_classes = opts.split_classes or format_options.split_classes,
+    protected_text_commands = opts.protected_text_commands or format_options.protected_text_commands,
   }
 
   local body, protected = normalize_math_body(lines)

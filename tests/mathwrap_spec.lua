@@ -40,6 +40,31 @@ tests["setup exposes indentation and soft width formatting defaults"] = function
   }), ("expected configured indentation and width, got %s"):format(vim.inspect(formatted)))
 end
 
+tests["setup exposes split classes and protected text commands"] = function()
+  reset_mathwrap()
+  local mathwrap = require("mathwrap")
+  mathwrap.setup({
+    split_classes = {
+      equation_relations = { "=", "\\approx" },
+      logical_connectors = { "\\iff", "\\therefore" },
+      clause_separators = { "\\quad" },
+    },
+    protected_text_commands = { "\\text", "\\customtext" },
+  })
+
+  local formatted = assert(mathwrap.format({
+    "  a \\approx b \\therefore c = \\customtext{keep   spaces = inline}  ",
+  }))
+
+  assert(vim.deep_equal(formatted, {
+    "a",
+    "\\approx b",
+    "\\therefore",
+    "c",
+    "= \\customtext{keep   spaces = inline}",
+  }), ("expected configured split classes and protected commands, got %s"):format(vim.inspect(formatted)))
+end
+
 tests["format outside enclosing display math block leaves buffer unchanged and reports error"] = function()
   reset_mathwrap()
   require("mathwrap").setup({})
