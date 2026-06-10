@@ -7,6 +7,7 @@ local M = {}
 local format_options = config.normalize({}).source_layout
 
 local structure_context = math_structure.new_context(format_options)
+local append_expanded_bracketed_line
 
 local function has_operand_before(text, operator_index, segment_start)
   local left = vim.trim(text:sub(segment_start, operator_index - 1))
@@ -91,6 +92,158 @@ local function split_top_level_punctuation_items(text)
   return items
 end
 
+local function split_top_level_implicit_products(text)
+  local factors = {}
+  local structural_factor_count = 0
+
+  local function skip_spaces(index)
+    while index <= #text and text:sub(index, index):match("%s") do
+      index = index + 1
+    end
+    return index
+  end
+
+  local parse_factor
+
+  local function consume_script(index)
+    local marker = text:sub(index, index)
+    if marker ~= "^" and marker ~= "_" then
+      return index
+    end
+
+    local argument_start = skip_spaces(index + 1)
+    local application = structure_context.math_command_application_at(text, argument_start)
+    if application then
+      return application.finish + 1
+    end
+
+    local opener = structure_context.raw_opener_at(text, argument_start)
+      or structure_context.escaped_opener_at(text, argument_start)
+      or structure_context.left_delimiter_at(text, argument_start)
+      or structure_context.vertical_delimiter_at(text, argument_start)
+    if opener then
+      local closer = structure_context.find_matching_closer(text, opener)
+      if closer then
+        return closer.finish + 1
+      end
+    end
+
+    local command = structure_context.command_token_at(text, argument_start)
+    if command then
+      return command.finish + 1
+    end
+
+    if argument_start <= #text then
+      return argument_start + 1
+    end
+    return index
+  end
+
+  local function consume_scripts(index)
+    local cursor = index
+    while cursor <= #text do
+      local next_cursor = consume_script(cursor)
+      if next_cursor == cursor then
+        break
+      else
+        cursor = next_cursor
+      end
+    end
+    return cursor
+  end
+
+  local function consume_primary(index)
+    local application = structure_context.math_command_application_at(text, index)
+    if application then
+      return application.finish + 1, "command_application", true
+    end
+
+    local opener = structure_context.raw_opener_at(text, index)
+      or structure_context.escaped_opener_at(text, index)
+      or structure_context.left_delimiter_at(text, index)
+      or structure_context.vertical_delimiter_at(text, index)
+    if opener then
+      local closer = structure_context.find_matching_closer(text, opener)
+      if closer then
+        return closer.finish + 1, "delimiter", true
+      end
+    end
+
+    local command = structure_context.command_token_at(text, index)
+    if command then
+      return command.finish + 1, "command", false
+    end
+
+    local char = text:sub(index, index)
+    if char == "" or char:match("[%+%-%*/=,;]") then
+      return nil
+    end
+    local finish = index
+    if char:match("[%w]") then
+      while finish <= #text and text:sub(finish, finish):match("[%w']") do
+        finish = finish + 1
+      end
+      return finish, "atom", false
+    end
+    return index + 1, "atom", false
+  end
+
+  parse_factor = function(index)
+    index = skip_spaces(index)
+    if index > #text then
+      return nil
+    end
+
+    local start_index = index
+    local cursor, kind, structural = consume_primary(index)
+    if not cursor then
+      return nil
+    end
+
+    local before_scripts = cursor
+    cursor = consume_scripts(cursor)
+    local has_scripts = cursor ~= before_scripts
+
+    if kind == "command" or (kind == "atom" and has_scripts) then
+      local argument_start = skip_spaces(cursor)
+      local opener = structure_context.raw_opener_at(text, argument_start)
+        or structure_context.escaped_opener_at(text, argument_start)
+        or structure_context.left_delimiter_at(text, argument_start)
+      if opener then
+        local closer = structure_context.find_matching_closer(text, opener)
+        if closer then
+          cursor = consume_scripts(closer.finish + 1)
+          structural = true
+        end
+      end
+    end
+
+    if text:sub(cursor, cursor) == "." then
+      cursor = cursor + 1
+    end
+
+    return vim.trim(text:sub(start_index, cursor - 1)), cursor, structural
+  end
+
+  local cursor = 1
+  while cursor <= #text do
+    local factor, next_cursor, structural = parse_factor(cursor)
+    if not factor then
+      return nil
+    end
+    table.insert(factors, factor)
+    if structural then
+      structural_factor_count = structural_factor_count + 1
+    end
+    cursor = skip_spaces(next_cursor)
+  end
+
+  if #factors < 2 or structural_factor_count < 2 then
+    return nil
+  end
+  return factors
+end
+
 local function split_bracket_inner(text)
   local items = split_top_level_punctuation_items(text)
   if items then
@@ -169,6 +322,12 @@ local function suffix_can_attach_to_child_closer(suffix, opener_prefix)
   if suffix_closes_containing_group(suffix) then
     return true
   end
+  if vim.trim(suffix):match("^[%^_]") then
+    return true
+  end
+  if vim.trim(suffix):match("^[%.,;]$") then
+    return true
+  end
 
   local first = vim.trim(suffix):sub(1, 1)
   local follows_command_argument = opener_prefix:match("\\[%a]+.*[%[{]$") ~= nil
@@ -206,8 +365,12 @@ local function candidate_direct_lines_fit(line, candidate)
   return #closer_line <= format_options.max_width
 end
 
-local function find_expandable_group(line)
-  if #line <= format_options.max_width then
+local function is_substantial_scalable_group(opener_token, inner)
+  return opener_token.kind == "scalable" and #inner > format_options.compact_atom_width
+end
+
+local function find_expandable_group(line, force)
+  if not force and #line <= format_options.max_width then
     return nil
   end
 
@@ -248,7 +411,7 @@ local function find_expandable_group(line)
             opener = opener_token,
             closer = closer_token,
             segments = segments,
-            synthetic_scalable_segments = synthetic_scalable_segments,
+            synthetic_scalable_segments = synthetic_scalable_segments and not is_substantial_scalable_group(opener_token, inner),
           })
         end
       end
@@ -311,8 +474,16 @@ end
 
 local expand_bracketed_segment
 
-local function append_expanded_bracketed_line(output, line, indent)
-  local opener_token, closer_token, segments, attach_suffix = find_expandable_group(line)
+append_expanded_bracketed_line = function(output, line, indent, force)
+  if indent == "" then
+    local leading_indent = line:match("^(%s*)") or ""
+    if leading_indent ~= "" then
+      indent = leading_indent
+      line = vim.trim(line)
+    end
+  end
+
+  local opener_token, closer_token, segments, attach_suffix = find_expandable_group(line, force)
   if not opener_token then
     table.insert(output, indent .. line)
     return
@@ -324,8 +495,10 @@ local function append_expanded_bracketed_line(output, line, indent)
   for _, segment in ipairs(segments) do
     expand_bracketed_segment(output, segment, indent .. format_options.indent)
   end
-  if attach_suffix and suffix ~= "" and suffix_can_attach_to_child_closer(suffix, opener_prefix) then
-    table.insert(output, indent .. closer_token.token .. " " .. suffix)
+  if suffix ~= "" and (attach_suffix or vim.trim(suffix):match("^[%^_]") or vim.trim(suffix):match("^[%.,;]$")) and suffix_can_attach_to_child_closer(suffix, opener_prefix) then
+    local trimmed_suffix = vim.trim(suffix)
+    local separator = (trimmed_suffix:match("^[%^_]") or trimmed_suffix:match("^[%.,;]$")) and "" or " "
+    table.insert(output, indent .. closer_token.token .. separator .. suffix)
     return
   end
 
@@ -423,6 +596,51 @@ local function split_width_pressure_membership_relations(lines)
   return split
 end
 
+local function leading_relation_prefix(line)
+  for _, token in ipairs(format_options.split_classes.equation_relations) do
+    if line:sub(1, #token + 1) == token .. " " then
+      return token, vim.trim(line:sub(#token + 2))
+    end
+  end
+  return nil, line
+end
+
+local function split_width_pressure_implicit_products(lines)
+  local split = {}
+
+  local function append_product_factor(line)
+    if line:find("\\left", 1, true) then
+      append_expanded_bracketed_line(split, line, "", true)
+    else
+      table.insert(split, line)
+    end
+  end
+
+  for _, line in ipairs(lines) do
+    if #line <= format_options.max_width then
+      table.insert(split, line)
+    else
+      local relation, body = leading_relation_prefix(line)
+      local factors = split_top_level_implicit_products(body)
+      if not factors then
+        table.insert(split, line)
+      else
+        for index, factor in ipairs(factors) do
+          if index == 1 and relation then
+            append_product_factor(relation .. " " .. factor)
+          elseif relation then
+            append_product_factor(format_options.indent .. factor)
+          else
+            append_product_factor(factor)
+          end
+        end
+      end
+    end
+  end
+
+  return split
+end
+
 local function format_equation_clause(body)
   if format_options.relation_split_policy == "width" and #body <= format_options.max_width then
     return expand_bracketed_expressions({ body })
@@ -460,7 +678,7 @@ local function format_equation_clause(body)
     position = relation_end + 1
   end
 
-  return expand_bracketed_expressions(split_width_pressure_membership_relations(formatted))
+  return expand_bracketed_expressions(split_width_pressure_implicit_products(split_width_pressure_membership_relations(formatted)))
 end
 
 local function find_next_clause_separator(body, position)

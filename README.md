@@ -128,6 +128,25 @@ result
 
 Unknown commands are treated as ordinary command tokens unless configured. For example, `\unknown{a+b}` may still expand the adjacent `{...}` group as a normal math structure, but Mathwrap will not treat it as a command application.
 
+Long implicit products can split between recognized structural factors under width pressure. Substantial scalable delimiter factors may expand even when their contents do not contain an additive or punctuation split:
+
+```latex
+k_{\alpha, h}(x, x') = \frac1{2^{\alpha-1}\Gamma(\alpha)}\left(\frac{\sqrt{2\alpha}\|x-x'\|}h\right)^\alpha K_\alpha\left(\frac{\sqrt{2\alpha}\|x-x'\|}h\right).
+```
+
+formats as:
+
+```latex
+k_{\alpha, h}(x, x')
+= \frac1{2^{\alpha-1}\Gamma(\alpha)}
+  \left(
+    \frac{\sqrt{2\alpha}\|x-x'\|}h
+  \right)^\alpha
+  K_\alpha\left(
+    \frac{\sqrt{2\alpha}\|x-x'\|}h
+  \right).
+```
+
 Formatting is idempotent: formatting already formatted output should not change it again. Parse failures such as line-bound comments outside protected text commands fail closed and leave the buffer unchanged.
 
 ## Non-Goals

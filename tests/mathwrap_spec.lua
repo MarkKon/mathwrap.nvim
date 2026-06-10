@@ -226,13 +226,13 @@ tests["matern kernel expands scalable distance before nested norm or exponent"] 
     },
     {
       "k_{\\alpha, h}(x, x')",
-      "= \\frac1{2^{\\alpha-1}\\Gamma(\\alpha)}\\left(",
-      "  \\frac{\\sqrt{2\\alpha}\\|x-x'\\|}h",
-      "\\right)",
-      "^\\alpha K_\\alpha\\left(",
-      "  \\frac{\\sqrt{2\\alpha}\\|x-x'\\|}h",
-      "\\right)",
-      ".",
+      "= \\frac1{2^{\\alpha-1}\\Gamma(\\alpha)}",
+      "  \\left(",
+      "    \\frac{\\sqrt{2\\alpha}\\|x-x'\\|}h",
+      "  \\right)^\\alpha",
+      "  K_\\alpha\\left(",
+      "    \\frac{\\sqrt{2\\alpha}\\|x-x'\\|}h",
+      "  \\right).",
     },
     { max_width = 44, compact_atom_width = 3 }
   )
@@ -321,6 +321,38 @@ tests["layout choice expands only wide braced command argument when sufficient"]
   )
 end
 
+tests["expand substantial scalable delimiter without internal split point"] = function()
+  assert_format_snapshot(
+    "expand substantial scalable delimiter without internal split point",
+    { "  result = \\left(\\frac{\\sqrt{2\\alpha}\\| x - x' \\|}{h}\\right)^\\alpha  " },
+    {
+      "result",
+      "= \\left(",
+      "  \\frac{\\sqrt{2\\alpha}\\| x - x' \\|}{h}",
+      "\\right)^\\alpha",
+    },
+    { max_width = 28 }
+  )
+end
+
+tests["split long implicit product factors under width pressure"] = function()
+  assert_format_snapshot(
+    "split long implicit product factors under width pressure",
+    { "  k_{\\alpha, h}(x, x') = \\frac1{2^{ \\alpha -1 } \\Gamma(\\alpha)}\\left(\\frac{\\sqrt{2\\alpha}\\| x -x' \\| }h\\right)^\\alpha K_\\alpha\\left(\\frac{\\sqrt{2\\alpha}\\| x -x' \\| }h\\right).  " },
+    {
+      "k_{\\alpha, h}(x, x')",
+      "= \\frac1{2^{ \\alpha -1 } \\Gamma(\\alpha)}",
+      "  \\left(",
+      "    \\frac{\\sqrt{2\\alpha}\\| x -x' \\| }h",
+      "  \\right)^\\alpha",
+      "  K_\\alpha\\left(",
+      "    \\frac{\\sqrt{2\\alpha}\\| x -x' \\| }h",
+      "  \\right).",
+    },
+    { max_width = 60 }
+  )
+end
+
 tests["layout choice expands both wide braced command arguments when needed"] = function()
   assert_format_snapshot(
     "layout choice expands both wide braced command arguments when needed",
@@ -400,7 +432,13 @@ tests["context regression snapshots format idempotently"] = function()
       },
       expected = {
         "k_{\\alpha, h}(x, x')",
-        "= \\frac1{2^{\\alpha-1}\\Gamma(\\alpha)}\\left(\\frac{\\sqrt{2\\alpha}\\|x-x'\\|}h\\right)^\\alpha K_\\alpha\\left(\\frac{\\sqrt{2\\alpha}\\|x-x'\\|}h\\right).",
+        "= \\frac1{2^{\\alpha-1}\\Gamma(\\alpha)}",
+        "  \\left(",
+        "    \\frac{\\sqrt{2\\alpha}\\|x-x'\\|}h",
+        "  \\right)^\\alpha",
+        "  K_\\alpha\\left(",
+        "    \\frac{\\sqrt{2\\alpha}\\|x-x'\\|}h",
+        "  \\right).",
       },
     },
   }

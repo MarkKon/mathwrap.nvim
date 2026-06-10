@@ -88,6 +88,10 @@ _Avoid_: arbitrary wrap option, rendering mode
 A configured source layout break candidate inside a grouped subexpression, such as a top-level additive operator, separator, or relation operator.
 _Avoid_: arbitrary character wrap, length-only split
 
+**Implicit Product Split**:
+A width-pressure source layout break between adjacent multiplicative factors that are written without an explicit operator.
+_Avoid_: arbitrary adjacency split, character wrap
+
 **Leading Operator Line**:
 A formatted line whose first non-whitespace token is the operator or separator that caused the split.
 _Avoid_: trailing operator line
@@ -165,6 +169,8 @@ _Avoid_: latex-math-source module
 - For a multi-argument **Math Command Application**, expanding only the wide **Command Argument** is preferred when that satisfies the **Soft Width Target**.
 - When only a child **Command Argument** expands, its closing delimiter remains attached to the parent-line suffix when that suffix still fits.
 - **Bracket Expansion** applies only when a grouped subexpression exceeds the configured width threshold, contains an **Internal Split Point**, and is not a **Compact Atom**.
+- A substantial **Scalable Delimiter Pair** may expand around one child structure even when its contents do not contain an **Internal Split Point**.
+- **Implicit Product Splits** apply only under width pressure and only between structural factors such as command applications, scripted scalable delimiter factors, or function-style command/delimiter factors.
 - **Interval Atoms** are conservatively recognized **Compact Atoms**; uncertain comma groups fall back to normal expansion rules.
 - Mixed raw paren/bracket pairs such as `(a,b]` are accepted only as **Interval Atoms**; otherwise unmatched raw delimiter shapes are a **Parse Failure**.
 - Braced command arguments are eligible for **Bracket Expansion** by default; **Text Command Arguments** are excluded from normalization and expansion.
@@ -186,6 +192,7 @@ _Avoid_: latex-math-source module
 - **Equation Relations** split inside an equation clause; **Logical Connectors** split between equation clauses and use a higher-level layout.
 - **Membership Relations** are a distinct configurable split class because their layout depends more strongly on context.
 - Additive operators split by default inside expanded brackets, but at top level they split only under width pressure.
+- Adjacent multiplicative factors split under width pressure only when the product contains enough recognized structure to avoid splitting ordinary words or coefficients into fragments.
 - Inside expanded groups, repeated top-level punctuation separators define list structure before additive operators split item internals.
 - **Logical Connectors** occupy standalone clause-level lines when split.
 - Spacing commands such as `\quad` and `\qquad` are treated as **Clause Separators**, not collapsed as ordinary whitespace; at the active split level, they occupy standalone separator lines.
