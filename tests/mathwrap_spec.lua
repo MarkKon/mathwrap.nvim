@@ -214,6 +214,16 @@ tests["context regression snapshots format idempotently"] = function()
       input = { "  a & = b \\\\ c&\\leq d \\\\ e = f  " },
       expected = { "a", "&= b", "\\\\", "c", "&\\leq d", "\\\\", "e", "= f" },
     },
+    {
+      name = "matern kernel keeps compact exponents and norm delimiters inline",
+      input = {
+        "  k_{\\alpha, h}(x, x') = \\frac1{2^{\\alpha-1}\\Gamma(\\alpha)}\\left(\\frac{\\sqrt{2\\alpha}\\|x-x'\\|}h\\right)^\\alpha K_\\alpha\\left(\\frac{\\sqrt{2\\alpha}\\|x-x'\\|}h\\right).  ",
+      },
+      expected = {
+        "k_{\\alpha, h}(x, x')",
+        "= \\frac1{2^{\\alpha-1}\\Gamma(\\alpha)}\\left(\\frac{\\sqrt{2\\alpha}\\|x-x'\\|}h\\right)^\\alpha K_\\alpha\\left(\\frac{\\sqrt{2\\alpha}\\|x-x'\\|}h\\right).",
+      },
+    },
   }
 
   for _, snapshot in ipairs(snapshots) do

@@ -799,7 +799,7 @@ local function find_expandable_group(line)
       if closer_token then
         local inner = vim.trim(line:sub(opener_token.finish + 1, closer_token.start - 1))
         local segments = split_bracket_inner(inner)
-        if segments then
+        if segments and #inner > format_options.compact_atom_width then
           return opener_token, closer_token, segments
         end
       end
