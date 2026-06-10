@@ -40,7 +40,7 @@ local function latex_math_format()
   end
 
   local body = vim.api.nvim_buf_get_lines(bufnr, opener, closer - 1, false)
-  local formatted, err = source_layout.format(body, current_config.source_layout)
+  local formatted, err = M.format(body)
   if not formatted then
     vim.notify("LatexMathFormat: " .. err, vim.log.levels.ERROR)
     return
@@ -48,11 +48,21 @@ local function latex_math_format()
   vim.api.nvim_buf_set_lines(bufnr, opener, closer - 1, false, formatted)
 end
 
+function M.format(lines, opts)
+  local format_config = current_config.source_layout
+  if opts then
+    format_config = config.normalize(vim.tbl_extend("force", current_config, opts)).source_layout
+  end
+  return source_layout.format(lines, format_config)
+end
+
 function M.setup(opts)
   current_config = config.normalize(opts)
 
   if current_config.command then
     vim.api.nvim_create_user_command("LatexMathFormat", latex_math_format, {})
+  elseif vim.fn.exists(":LatexMathFormat") == 2 then
+    vim.api.nvim_del_user_command("LatexMathFormat")
   end
 end
 

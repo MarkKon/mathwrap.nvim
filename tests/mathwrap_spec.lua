@@ -9,6 +9,18 @@ end
 
 local tests = {}
 
+tests["public format entry point formats math body lines without registering commands"] = function()
+  reset_mathwrap()
+  local mathwrap = require("mathwrap")
+  mathwrap.setup({ command = false })
+
+  local command_exists = vim.fn.exists(":LatexMathFormat")
+  local formatted = assert(mathwrap.format({ "  a=b  " }))
+
+  assert(command_exists == 0, "expected setup({ command = false }) to skip command registration")
+  assert(vim.deep_equal(formatted, { "a", "= b" }), ("expected formatted lines, got %s"):format(vim.inspect(formatted)))
+end
+
 tests["format outside enclosing display math block leaves buffer unchanged and reports error"] = function()
   reset_mathwrap()
   require("mathwrap").setup({})
