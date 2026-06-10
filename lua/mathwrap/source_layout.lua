@@ -1,26 +1,9 @@
+local config = require("mathwrap.config")
 local scanner = require("mathwrap.scanner")
 
 local M = {}
 
-local format_options = {
-  indent = "  ",
-  max_width = 60,
-  relation_split_policy = "always",
-  bracket_expansion = true,
-  compact_atom_width = 28,
-  split_classes = {
-    equation_relations = { ":=", "\\leq", "\\geq", "=" },
-    logical_connectors = { "\\implies", "\\iff" },
-    clause_separators = { "\\qquad", "\\quad" },
-    additive_operators = { "+", "-" },
-    punctuation_separators = { ",", ";" },
-  },
-  protected_text_commands = { "\\text", "\\textrm", "\\textit", "\\textbf", "\\mathrm", "\\operatorname" },
-  math_commands = {
-    ["\\frac"] = { required = 2 },
-    ["\\sqrt"] = { optional = 1, required = 1 },
-  },
-}
+local format_options = config.normalize({}).source_layout
 
 local is_escaped_at
 

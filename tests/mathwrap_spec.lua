@@ -1085,6 +1085,32 @@ tests["configured math commands consume declared arguments"] = function()
   })
 end
 
+tests["configured math commands consume optional and required arguments"] = function()
+  reset_mathwrap()
+  require("mathwrap").setup({
+    math_commands = {
+      ["\\rootof"] = { optional = 1, required = 1 },
+    },
+  })
+
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, {
+    "$$",
+    "  result = \\rootof[index = n]{radicand = x} = tail  ",
+    "$$",
+  })
+  vim.api.nvim_win_set_cursor(0, { 2, 0 })
+
+  vim.cmd("LatexMathFormat")
+
+  assert_lines({
+    "$$",
+    "result",
+    "= \\rootof[index = n]{radicand = x}",
+    "= tail",
+    "$$",
+  })
+end
+
 tests["unknown commands leave adjacent groups as ordinary math structures"] = function()
   reset_mathwrap()
   require("mathwrap").setup({})

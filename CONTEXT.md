@@ -163,6 +163,7 @@ _Avoid_: latex-math-source module
 - **Source Layout Formatting** includes both **Relation Splits** and **Bracket Expansion** as core formatting mechanisms.
 - **Source Layout Formatting** chooses among **Layout Choices** by preferring the fewest expansions that satisfy the **Soft Width Target** when a satisfying choice exists.
 - For a multi-argument **Math Command Application**, expanding only the wide **Command Argument** is preferred when that satisfies the **Soft Width Target**.
+- When only a child **Command Argument** expands, its closing delimiter remains attached to the parent-line suffix when that suffix still fits.
 - **Bracket Expansion** applies only when a grouped subexpression exceeds the configured width threshold, contains an **Internal Split Point**, and is not a **Compact Atom**.
 - **Interval Atoms** are conservatively recognized **Compact Atoms**; uncertain comma groups fall back to normal expansion rules.
 - Mixed raw paren/bracket pairs such as `(a,b]` are accepted only as **Interval Atoms**; otherwise unmatched raw delimiter shapes are a **Parse Failure**.
@@ -225,6 +226,12 @@ _Avoid_: latex-math-source module
 >
 > **Dev:** "Should `\frac{...}{...}` be protected from expansion just because it is a command argument?"
 > **Domain expert:** "No — braced command arguments can become unreadable too; only **Text Command Arguments** get special protection."
+>
+> **Dev:** "If only the denominator in `\frac a{long_one + long_two} + tail` expands, should `+ tail` move to its own line?"
+> **Domain expert:** "No — minimal child expansion keeps the closing `}` attached to the parent suffix as `} + tail` when that satisfies the **Soft Width Target**."
+>
+> **Dev:** "Should `\frac a{b+c}` become `\frac{a}{b+c}` during formatting?"
+> **Domain expert:** "No — **Command Argument** spelling is preserved; command-aware parsing recognizes the application without rewriting the user's bracing."
 >
 > **Dev:** "Does `\{x \in A\}` create a braced group for formatting?"
 > **Domain expert:** "Yes — `\{` and `\}` are **Visible Delimiters**, so they can group and expand like delimiter pairs."
