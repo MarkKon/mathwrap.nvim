@@ -7,6 +7,18 @@ local function assert_lines(expected)
   assert(vim.deep_equal(actual, expected), ("expected %s, got %s"):format(vim.inspect(expected), vim.inspect(actual)))
 end
 
+local function assert_format_snapshot(name, input, expected, opts)
+  reset_mathwrap()
+  local mathwrap = require("mathwrap")
+  mathwrap.setup(opts or {})
+
+  local once = assert(mathwrap.format(input))
+  assert(vim.deep_equal(once, expected), ("%s: expected %s, got %s"):format(name, vim.inspect(expected), vim.inspect(once)))
+
+  local twice = assert(mathwrap.format(once))
+  assert(vim.deep_equal(twice, once), ("%s: expected idempotent output, got %s then %s"):format(name, vim.inspect(once), vim.inspect(twice)))
+end
+
 local tests = {}
 
 tests["public format entry point formats math body lines without registering commands"] = function()
@@ -95,6 +107,50 @@ tests["width relation split policy only splits relations under width pressure"] 
 
   assert(vim.deep_equal(compact, { "a=b" }), ("expected compact relation chain to stay inline, got %s"):format(vim.inspect(compact)))
   assert(vim.deep_equal(wide, { "alpha", "= beta" }), ("expected wide relation chain to split, got %s"):format(vim.inspect(wide)))
+end
+
+tests["context regression snapshots format idempotently"] = function()
+  local snapshots = {
+    {
+      name = "equation relations use leading operator lines",
+      input = { "  a=b\\leq c:=d\\geq e  " },
+      expected = { "a", "= b", "\\leq c", ":= d", "\\geq e" },
+    },
+    {
+      name = "logical connectors and spacing separators split clauses",
+      input = { "  a=b \\iff c=d \\quad e=f  " },
+      expected = { "a", "= b", "\\iff", "c", "= d", "\\quad", "e", "= f" },
+    },
+    {
+      name = "compact membership relations stay inline",
+      input = { "  z\\sim\\pi x\\in A f:X\\to Y  " },
+      expected = { "z\\sim\\pi x\\in A f:X\\to Y" },
+    },
+    {
+      name = "bracket expansion uses leading operators and aligned closers",
+      input = { "  F = alpha(beta_one + beta_two + beta_three + beta_four + beta_five + beta_six)  " },
+      expected = { "F", "= alpha(", "  beta_one", "  + beta_two", "  + beta_three", "  + beta_four", "  + beta_five", "  + beta_six", ")" },
+    },
+    {
+      name = "interval atoms remain compact inside expanded groups",
+      input = { "  intervals = outer((-\\infty, 0] + [0,1) + \\left[0,\\frac{1}{2}\\right) + tail_one + tail_two)  " },
+      expected = { "intervals", "= outer(", "  (-\\infty, 0]", "  + [0,1)", "  + \\left[0,\\frac{1}{2}\\right)", "  + tail_one", "  + tail_two", ")" },
+    },
+    {
+      name = "protected text command arguments keep internal whitespace",
+      input = { "  label = \\text{two   spaces = stay + inline} \\quad name = \\operatorname{very   long + operator + name + stays + inline}  " },
+      expected = { "label", "= \\text{two   spaces = stay + inline}", "\\quad", "name", "= \\operatorname{very   long + operator + name + stays + inline}" },
+    },
+    {
+      name = "row separators and alignment markers are preserved",
+      input = { "  a & = b \\\\ c&\\leq d \\\\ e = f  " },
+      expected = { "a", "&= b", "\\\\", "c", "&\\leq d", "\\\\", "e", "= f" },
+    },
+  }
+
+  for _, snapshot in ipairs(snapshots) do
+    assert_format_snapshot(snapshot.name, snapshot.input, snapshot.expected, snapshot.opts)
+  end
 end
 
 tests["format outside enclosing display math block leaves buffer unchanged and reports error"] = function()
