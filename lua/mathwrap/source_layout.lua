@@ -902,6 +902,52 @@ local function append_clause(formatted, clause)
   end
 end
 
+local function split_top_level_rows(body)
+  local rows = {}
+  local row_start = 1
+  local stack = {}
+  local index = 1
+
+  while index <= #body do
+    local advanced, next_index = advance_delimiter_depth(body, index, stack)
+    if advanced then
+      index = next_index
+    elseif #stack == 0 and body:sub(index, index + 1) == "\\\\" then
+      table.insert(rows, vim.trim(body:sub(row_start, index - 1)))
+      row_start = index + 2
+      index = index + 2
+    else
+      index = index + 1
+    end
+  end
+
+  if row_start == 1 then
+    return nil
+  end
+
+  table.insert(rows, vim.trim(body:sub(row_start)))
+  return rows
+end
+
+local function format_row(body)
+  local formatted = {}
+  local position = 1
+
+  while position <= #body do
+    local separator_start, separator_end, separator = find_next_clause_separator(body, position)
+    if not separator_start then
+      append_clause(formatted, body:sub(position))
+      break
+    end
+
+    append_clause(formatted, body:sub(position, separator_start - 1))
+    table.insert(formatted, separator)
+    position = separator_end + 1
+  end
+
+  return formatted
+end
+
 function M.format(lines, opts)
   opts = opts or {}
   format_options = {
@@ -914,17 +960,17 @@ function M.format(lines, opts)
   end
 
   local formatted = {}
-  local position = 1
-  while position <= #body do
-    local separator_start, separator_end, separator = find_next_clause_separator(body, position)
-    if not separator_start then
-      append_clause(formatted, body:sub(position))
-      break
-    end
+  local rows = split_top_level_rows(body) or { body }
 
-    append_clause(formatted, body:sub(position, separator_start - 1))
-    table.insert(formatted, separator)
-    position = separator_end + 1
+  for row_index, row in ipairs(rows) do
+    if row ~= "" then
+      for _, line in ipairs(format_row(row)) do
+        table.insert(formatted, line)
+      end
+    end
+    if row_index < #rows then
+      table.insert(formatted, "\\\\")
+    end
   end
 
   for index, line in ipairs(formatted) do
