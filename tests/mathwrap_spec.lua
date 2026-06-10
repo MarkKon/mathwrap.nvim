@@ -165,6 +165,40 @@ tests["width relation split policy only splits relations under width pressure"] 
   assert(vim.deep_equal(wide, { "alpha", "= beta" }), ("expected wide relation chain to split, got %s"):format(vim.inspect(wide)))
 end
 
+tests["short braced exponent stays inline inside long surrounding expression"] = function()
+  assert_format_snapshot(
+    "short braced exponent stays inline inside long surrounding expression",
+    { "  result = coefficient_with_long_name 2^{a-b} trailing_factor_with_long_name  " },
+    {
+      "result",
+      "= coefficient_with_long_name 2^{a-b} trailing_factor_with_long_name",
+    }
+  )
+end
+
+tests["short vertical delimiter atom stays inline inside long surrounding expression"] = function()
+  assert_format_snapshot(
+    "short vertical delimiter atom stays inline inside long surrounding expression",
+    { "  result = coefficient_with_long_name \\|x-x'\\| trailing_factor_with_long_name  " },
+    {
+      "result",
+      "= coefficient_with_long_name \\|x-x'\\| trailing_factor_with_long_name",
+    }
+  )
+end
+
+tests["bracket expansion uses candidate inner length rather than containing line length"] = function()
+  assert_format_snapshot(
+    "bracket expansion uses candidate inner length rather than containing line length",
+    { "  result = prefix_with_long_name(a+b) suffix_with_long_name  " },
+    {
+      "result",
+      "= prefix_with_long_name(a+b) suffix_with_long_name",
+    },
+    { max_width = 20 }
+  )
+end
+
 tests["context regression snapshots format idempotently"] = function()
   local snapshots = {
     {
