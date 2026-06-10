@@ -958,6 +958,73 @@ local function find_top_level_token(text, token, position)
   return scanner.find_top_level_token(text, token, position, advance_delimiter_depth)
 end
 
+local function suffix_closes_containing_group(suffix)
+  local stack = {}
+  local index = 1
+  while index <= #suffix do
+    local closer = raw_closer_at(suffix, index) or escaped_closer_at(suffix, index) or right_delimiter_at(suffix, index)
+    if closer and #stack == 0 then
+      return vim.trim(suffix:sub(closer.finish + 1)) == ""
+    end
+
+    local advanced, next_index = advance_delimiter_depth(suffix, index, stack)
+    if advanced then
+      index = next_index
+    else
+      index = index + 1
+    end
+  end
+
+  return false
+end
+
+local function suffix_can_attach_to_child_closer(suffix, opener_prefix)
+  if suffix == "" then
+    return true
+  end
+  if suffix:find("=", 1, true) then
+    return false
+  end
+  if suffix_closes_containing_group(suffix) then
+    return true
+  end
+
+  local first = vim.trim(suffix):sub(1, 1)
+  local follows_command_argument = opener_prefix:match("\\[%a]+.*[%[{]$") ~= nil
+  return follows_command_argument
+    and (
+      vim.tbl_contains(format_options.split_classes.additive_operators, first)
+      or vim.tbl_contains(format_options.split_classes.punctuation_separators, first)
+    )
+end
+
+local function candidate_direct_lines_fit(line, candidate)
+  if candidate.opener.kind == "vertical" then
+    return false
+  end
+
+  local opener_prefix = vim.trim(line:sub(1, candidate.opener.finish))
+  local suffix = vim.trim(line:sub(candidate.closer.finish + 1))
+  if not suffix_can_attach_to_child_closer(suffix, opener_prefix) then
+    return false
+  end
+
+  if #opener_prefix > format_options.max_width then
+    return false
+  end
+  for _, segment in ipairs(candidate.segments) do
+    if #segment + #format_options.indent > format_options.max_width then
+      return false
+    end
+  end
+
+  local closer_line = candidate.closer.token
+  if suffix ~= "" then
+    closer_line = closer_line .. " " .. suffix
+  end
+  return #closer_line <= format_options.max_width
+end
+
 local function find_expandable_group(line)
   if #line <= format_options.max_width then
     return nil
@@ -1008,6 +1075,16 @@ local function find_expandable_group(line)
     end
   end
 
+  local satisfying_candidate
+  for _, candidate in ipairs(candidates) do
+    if not candidate.synthetic_scalable_segments and candidate_direct_lines_fit(line, candidate) then
+      satisfying_candidate = candidate
+    end
+  end
+  if satisfying_candidate then
+    return satisfying_candidate.opener, satisfying_candidate.closer, satisfying_candidate.segments, true
+  end
+
   for _, candidate in ipairs(candidates) do
     if candidate.opener.kind == "scalable" then
       local first_candidate = candidates[1]
@@ -1036,7 +1113,7 @@ local function find_expandable_group(line)
           or not has_top_level_structural_separator(line, first_candidate.opener.start, candidate.opener.start - 1)
         )
       then
-        return candidate.opener, candidate.closer, candidate.segments
+        return candidate.opener, candidate.closer, candidate.segments, false
       end
       break
     end
@@ -1044,7 +1121,7 @@ local function find_expandable_group(line)
 
   for _, candidate in ipairs(candidates) do
     if not candidate.synthetic_scalable_segments then
-      return candidate.opener, candidate.closer, candidate.segments
+      return candidate.opener, candidate.closer, candidate.segments, false
     end
   end
 
@@ -1054,7 +1131,7 @@ end
 local expand_bracketed_segment
 
 local function append_expanded_bracketed_line(output, line, indent)
-  local opener_token, closer_token, segments = find_expandable_group(line)
+  local opener_token, closer_token, segments, attach_suffix = find_expandable_group(line)
   if not opener_token then
     table.insert(output, indent .. line)
     return
@@ -1066,6 +1143,11 @@ local function append_expanded_bracketed_line(output, line, indent)
   for _, segment in ipairs(segments) do
     expand_bracketed_segment(output, segment, indent .. format_options.indent)
   end
+  if attach_suffix and suffix ~= "" and suffix_can_attach_to_child_closer(suffix, opener_prefix) then
+    table.insert(output, indent .. closer_token.token .. " " .. suffix)
+    return
+  end
+
   table.insert(output, indent .. closer_token.token)
   if suffix ~= "" then
     expand_bracketed_segment(output, suffix, indent)

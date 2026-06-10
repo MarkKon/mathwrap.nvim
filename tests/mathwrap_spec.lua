@@ -256,6 +256,63 @@ tests["bracket expansion uses candidate inner length rather than containing line
   )
 end
 
+tests["layout choice expands only nested wide delimiter group when sufficient"] = function()
+  assert_format_snapshot(
+    "layout choice expands only nested wide delimiter group when sufficient",
+    { "  result = outer(short + inner(long_one + long_two + long_three + long_four) + tail)  " },
+    {
+      "result",
+      "= outer(short + inner(",
+      "  long_one",
+      "  + long_two",
+      "  + long_three",
+      "  + long_four",
+      ") + tail)",
+    },
+    { max_width = 31 }
+  )
+end
+
+tests["layout choice expands only wide braced command argument when sufficient"] = function()
+  assert_format_snapshot(
+    "layout choice expands only wide braced command argument when sufficient",
+    { "  result = \\frac a{long_one + long_two + long_three + long_four} + tail  " },
+    {
+      "result",
+      "= \\frac a{",
+      "  long_one",
+      "  + long_two",
+      "  + long_three",
+      "  + long_four",
+      "} + tail",
+    },
+    { max_width = 24 }
+  )
+end
+
+tests["layout choice expands both wide braced command arguments when needed"] = function()
+  assert_format_snapshot(
+    "layout choice expands both wide braced command arguments when needed",
+    { "  result = \\frac{left_one + left_two + left_three + left_four}{right_one + right_two + right_three + right_four}  " },
+    {
+      "result",
+      "= \\frac{",
+      "  left_one",
+      "  + left_two",
+      "  + left_three",
+      "  + left_four",
+      "}",
+      "{",
+      "  right_one",
+      "  + right_two",
+      "  + right_three",
+      "  + right_four",
+      "}",
+    },
+    { max_width = 32 }
+  )
+end
+
 tests["context regression snapshots format idempotently"] = function()
   local snapshots = {
     {
@@ -1071,17 +1128,13 @@ tests["expand nested raw bracketed groups recursively while preserving delimiter
   assert_lines({
     "$$",
     "result",
-    "= wrap(",
-    "  first_term",
-    "  + inner{",
-    "    alpha_one",
-    "    + alpha_two",
-    "    + alpha_three",
-    "    + alpha_four",
-    "    + alpha_five",
-    "  }",
-    "  + last_term",
-    ")",
+    "= wrap(first_term + inner{",
+    "  alpha_one",
+    "  + alpha_two",
+    "  + alpha_three",
+    "  + alpha_four",
+    "  + alpha_five",
+    "} + last_term)",
     "$$",
   })
 end
@@ -1742,8 +1795,7 @@ tests["expand visible and scalable delimiter spans recursively"] = function()
     "    + alpha_three",
     "    + alpha_four",
     "    + alpha_five",
-    "  )",
-    "  \\}",
+    "  ) \\}",
     "  + gamma",
     "  + delta",
     "  + epsilon",
@@ -1751,15 +1803,13 @@ tests["expand visible and scalable delimiter spans recursively"] = function()
     ")",
     "outer_scalable",
     "= wrap(",
-    "  \\left.",
-    "    inner(",
-    "      alpha_one",
-    "      + alpha_two",
-    "      + alpha_three",
-    "      + alpha_four",
-    "      + alpha_five",
-    "    )",
-    "  \\right.",
+    "  \\left.inner(",
+    "    alpha_one",
+    "    + alpha_two",
+    "    + alpha_three",
+    "    + alpha_four",
+    "    + alpha_five",
+    "  ) \\right.",
     "  + gamma",
     "  + delta",
     "  + epsilon",
