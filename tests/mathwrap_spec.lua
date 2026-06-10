@@ -187,6 +187,63 @@ tests["short vertical delimiter atom stays inline inside long surrounding expres
   )
 end
 
+tests["matern kernel expands scalable distance before nested norm or exponent"] = function()
+  assert_format_snapshot(
+    "matern kernel expands scalable distance before nested norm or exponent",
+    {
+      "  k_{\\alpha, h}(x, x') = \\frac1{2^{\\alpha-1}\\Gamma(\\alpha)}\\left(\\frac{\\sqrt{2\\alpha}\\|x-x'\\|}h\\right)^\\alpha K_\\alpha\\left(\\frac{\\sqrt{2\\alpha}\\|x-x'\\|}h\\right).  ",
+    },
+    {
+      "k_{\\alpha, h}(x, x')",
+      "= \\frac1{2^{\\alpha-1}\\Gamma(\\alpha)}\\left(",
+      "  \\frac{\\sqrt{2\\alpha}\\|x-x'\\|}h",
+      "\\right)",
+      "^\\alpha K_\\alpha\\left(",
+      "  \\frac{\\sqrt{2\\alpha}\\|x-x'\\|}h",
+      "\\right)",
+      ".",
+    },
+    { max_width = 44, compact_atom_width = 3 }
+  )
+end
+
+tests["long scalable delimiter group expands with opener attached and closer alone"] = function()
+  assert_format_snapshot(
+    "long scalable delimiter group expands with opener attached and closer alone",
+    { "  result = prefix\\left(inner_a + inner_b + inner_c + inner_d + inner_e\\right)suffix  " },
+    {
+      "result",
+      "= prefix\\left(",
+      "  inner_a",
+      "  + inner_b",
+      "  + inner_c",
+      "  + inner_d",
+      "  + inner_e",
+      "\\right)",
+      "suffix",
+    },
+    { max_width = 40 }
+  )
+end
+
+tests["scalable delimiter group wins over nested eligible vertical delimiter"] = function()
+  assert_format_snapshot(
+    "scalable delimiter group wins over nested eligible vertical delimiter",
+    { "  result = prefix\\left(\\|alpha-beta-gamma-delta\\| + tail_a + tail_b + tail_c\\right)suffix  " },
+    {
+      "result",
+      "= prefix\\left(",
+      "  \\|alpha-beta-gamma-delta\\|",
+      "  + tail_a",
+      "  + tail_b",
+      "  + tail_c",
+      "\\right)",
+      "suffix",
+    },
+    { max_width = 40, compact_atom_width = 3 }
+  )
+end
+
 tests["bracket expansion uses candidate inner length rather than containing line length"] = function()
   assert_format_snapshot(
     "bracket expansion uses candidate inner length rather than containing line length",
@@ -1551,14 +1608,16 @@ tests["expand visible and scalable delimiter spans recursively"] = function()
     "  + alpha_five",
     ")",
     "\\} scalable",
-    "= \\left.inner(",
-    "  alpha_one",
-    "  + alpha_two",
-    "  + alpha_three",
-    "  + alpha_four",
-    "  + alpha_five",
-    ")",
-    "\\right. outer",
+    "= \\left.",
+    "  inner(",
+    "    alpha_one",
+    "    + alpha_two",
+    "    + alpha_three",
+    "    + alpha_four",
+    "    + alpha_five",
+    "  )",
+    "\\right.",
+    "outer",
     "= wrap(",
     "  \\{inner(",
     "    alpha_one",
@@ -1575,13 +1634,14 @@ tests["expand visible and scalable delimiter spans recursively"] = function()
     ")",
     "outer_scalable",
     "= wrap(",
-    "  \\left.inner(",
-    "    alpha_one",
-    "    + alpha_two",
-    "    + alpha_three",
-    "    + alpha_four",
-    "    + alpha_five",
-    "  )",
+    "  \\left.",
+    "    inner(",
+    "      alpha_one",
+    "      + alpha_two",
+    "      + alpha_three",
+    "      + alpha_four",
+    "      + alpha_five",
+    "    )",
     "  \\right.",
     "  + gamma",
     "  + delta",

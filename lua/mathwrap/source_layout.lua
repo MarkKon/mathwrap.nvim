@@ -769,6 +769,31 @@ local function split_bracket_inner(text)
   return split_top_level_additive(text)
 end
 
+local function has_top_level_structural_separator(text, start_index, finish_index)
+  local stack = {}
+  local index = start_index
+
+  while index <= finish_index do
+    local advanced, next_index = advance_delimiter_depth(text, index, stack)
+    if advanced then
+      index = next_index
+    elseif #stack == 0 then
+      local char = text:sub(index, index)
+      if
+        vim.tbl_contains(format_options.split_classes.additive_operators, char)
+        or vim.tbl_contains(format_options.split_classes.punctuation_separators, char)
+      then
+        return true
+      end
+      index = index + 1
+    else
+      index = index + 1
+    end
+  end
+
+  return false
+end
+
 local function find_top_level_token(text, token, position)
   return scanner.find_top_level_token(text, token, position, advance_delimiter_depth)
 end
@@ -778,6 +803,7 @@ local function find_expandable_group(line)
     return nil
   end
 
+  local candidates = {}
   local stack = {}
   local opener_index = 1
   while opener_index <= #line do
@@ -799,11 +825,61 @@ local function find_expandable_group(line)
       if closer_token then
         local inner = vim.trim(line:sub(opener_token.finish + 1, closer_token.start - 1))
         local segments = split_bracket_inner(inner)
+        local synthetic_scalable_segments = false
+        if not segments and opener_token.kind == "scalable" then
+          segments = { inner }
+          synthetic_scalable_segments = true
+        end
         if segments and #inner > format_options.compact_atom_width then
-          return opener_token, closer_token, segments
+          table.insert(candidates, {
+            opener = opener_token,
+            closer = closer_token,
+            segments = segments,
+            synthetic_scalable_segments = synthetic_scalable_segments,
+          })
         end
       end
       opener_index = opener_token.finish + 1
+    end
+  end
+
+  for _, candidate in ipairs(candidates) do
+    if candidate.opener.kind == "scalable" then
+      local first_candidate = candidates[1]
+      local contains_eligible_nested_candidate = false
+      if candidate.synthetic_scalable_segments then
+        for _, nested_candidate in ipairs(candidates) do
+          if
+            nested_candidate ~= candidate
+            and candidate.opener.start < nested_candidate.opener.start
+            and nested_candidate.closer.finish < candidate.closer.finish
+          then
+            contains_eligible_nested_candidate = true
+            break
+          end
+        end
+      end
+      if
+        (not candidate.synthetic_scalable_segments or contains_eligible_nested_candidate)
+        and not (
+          first_candidate ~= candidate
+          and first_candidate.opener.start < candidate.opener.start
+          and candidate.closer.finish < first_candidate.closer.finish
+        )
+        and (
+          first_candidate == candidate
+          or not has_top_level_structural_separator(line, first_candidate.opener.start, candidate.opener.start - 1)
+        )
+      then
+        return candidate.opener, candidate.closer, candidate.segments
+      end
+      break
+    end
+  end
+
+  for _, candidate in ipairs(candidates) do
+    if not candidate.synthetic_scalable_segments then
+      return candidate.opener, candidate.closer, candidate.segments
     end
   end
 
